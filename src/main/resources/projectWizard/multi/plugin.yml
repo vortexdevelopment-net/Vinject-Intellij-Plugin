@@ -1,0 +1,4 @@
+name: $ARTIFACT_ID$
+version: '1.0.0-SNAPSHOT'
+main: $MAIN$
+api-version: '1.21'
