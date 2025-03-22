@@ -4,7 +4,6 @@ import com.intellij.psi.PsiAnnotation;
 import com.intellij.psi.PsiClass;
 import com.intellij.psi.PsiMethod;
 import com.intellij.psi.PsiType;
-import net.vortexdevelopment.plugin.vinject.Plugin;
 
 import java.util.List;
 import java.util.Objects;

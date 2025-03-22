@@ -1,27 +1,18 @@
 package net.vortexdevelopment.plugin.vinject.build;
 
-import com.intellij.build.events.MessageEvent;
-import com.intellij.build.issue.BuildIssue;
-import com.intellij.compiler.progress.BuildIssueContributor;
 import com.intellij.ide.highlighter.JavaFileType;
 import com.intellij.openapi.compiler.CompileContext;
 import com.intellij.openapi.compiler.CompileScope;
 import com.intellij.openapi.compiler.util.InspectionValidator;
-import com.intellij.openapi.fileTypes.FileType;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.vfs.VirtualFile;
-import com.intellij.pom.Navigatable;
 import com.intellij.psi.PsiClass;
 import com.intellij.psi.PsiJavaFile;
 import net.vortexdevelopment.plugin.vinject.container.ClassDataManager;
-import org.jetbrains.annotations.Nls;
-import org.jetbrains.annotations.NonNls;
 import org.jetbrains.annotations.NotNull;
-import org.jetbrains.annotations.Nullable;
 
 import java.util.Arrays;
 import java.util.Collection;
-import java.util.List;
 import java.util.stream.Collectors;
 
 public class VInjectInspectionValidator extends InspectionValidator {

@@ -1,8 +1,8 @@
 package $PACKAGE$;
 
-import net.vortexdevelopment.vortexcore.VortexPlugin;
 import net.vortexdevelopment.vinject.annotation.Root;
 import net.vortexdevelopment.vinject.annotation.TemplateDependency;
+import net.vortexdevelopment.vortexcore.VortexPlugin;
 
 @Root(
         packageName = "$PACKAGE$",

@@ -1,23 +1,24 @@
 package net.vortexdevelopment.plugin.vinject.project;
 
-import com.intellij.ide.impl.ProjectUtil;
+import com.intellij.ide.util.PropertiesComponent;
 import com.intellij.ide.util.projectWizard.WizardContext;
-import com.intellij.ide.wizard.AbstractNewProjectWizardStep;
-import com.intellij.ide.wizard.CommitStepException;
 import com.intellij.ide.wizard.NewProjectWizardStep;
-import com.intellij.openapi.fileChooser.FileChooser;
+import com.intellij.openapi.application.ApplicationManager;
+import com.intellij.openapi.application.ModalityState;
 import com.intellij.openapi.fileChooser.FileChooserDescriptor;
+import com.intellij.openapi.fileChooser.FileChooserDescriptorFactory;
 import com.intellij.openapi.observable.properties.GraphProperty;
 import com.intellij.openapi.observable.properties.PropertyGraph;
-import com.intellij.openapi.project.DumbService;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.projectRoots.Sdk;
 import com.intellij.openapi.projectRoots.SdkTypeId;
 import com.intellij.openapi.roots.ui.configuration.JdkComboBox;
 import com.intellij.openapi.roots.ui.configuration.projectRoot.ProjectSdksModel;
+import com.intellij.openapi.ui.TextComponentAccessor;
+import com.intellij.openapi.ui.TextFieldWithBrowseButton;
 import com.intellij.openapi.util.Key;
 import com.intellij.openapi.util.UserDataHolder;
-import com.intellij.openapi.vfs.VirtualFile;
+import com.intellij.ui.DocumentAdapter;
 import com.intellij.ui.JBColor;
 import com.intellij.ui.components.JBTextField;
 import com.intellij.ui.dsl.builder.AlignX;
@@ -27,16 +28,17 @@ import kotlin.Unit;
 import kotlin.jvm.functions.Function1;
 import net.vortexdevelopment.plugin.vinject.Plugin;
 import org.jetbrains.annotations.NotNull;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 
 import javax.swing.*;
-import java.awt.*;
+import javax.swing.event.DocumentEvent;
 import java.io.File;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
-import java.nio.file.Path;
 import java.util.Locale;
 
-public class ProjectWizardStep extends AbstractNewProjectWizardStep {
+public class ProjectWizardStep implements NewProjectWizardStep {
     public static final Key<Boolean> INCLUDE_API_MODULE_KEY = Key.create("INCLUDE_API_MODULE");
     public static final Key<String> GROUP_ID_KEY = Key.create("GROUP_ID");
     public static final Key<String> ARTIFACT_ID_KEY = Key.create("ARTIFACT_ID");
@@ -49,31 +51,11 @@ public class ProjectWizardStep extends AbstractNewProjectWizardStep {
     private JdkComboBox jdkComboBox;
     private final ProjectSdksModel sdksModel = new ProjectSdksModel();
     private WizardContext context;
-    JBTextField locationField = new JBTextField("", 30);
+    JBTextField locationField = new JBTextField("", 25);
 
+    private final Logger logger = LoggerFactory.getLogger(ProjectWizardStep.class);
 
     public ProjectWizardStep(@NotNull WizardContext context) {
-        super(new NewProjectWizardStep() {
-            @Override
-            public @NotNull WizardContext getContext() {
-                return context;
-            }
-
-            @Override
-            public @NotNull PropertyGraph getPropertyGraph() {
-                return new PropertyGraph();
-            }
-
-            @Override
-            public @NotNull Keywords getKeywords() {
-                return new Keywords();
-            }
-
-            @Override
-            public @NotNull UserDataHolder getData() {
-                return context;
-            }
-        });
         this.context = context;
         // Initialize properties
         groupIdProperty = getPropertyGraph().property("com.example");
@@ -83,8 +65,26 @@ public class ProjectWizardStep extends AbstractNewProjectWizardStep {
         // Add API module by default
         context.putUserData(INCLUDE_API_MODULE_KEY, true);
 
-        // Initialize SDK model
-        sdksModel.reset(context.getProject());
+        try {
+            sdksModel.reset(context.getProject());
+        } catch (Exception e) {
+            logger.error("Error initializing SDK model", e);
+        }
+
+        jdkComboBox = new JdkComboBox(
+                context.getProject(),
+                sdksModel,
+                sdkTypeId -> sdkTypeId.getName().contains("Java"), // Lambda instead of method reference
+                null,
+                null,
+                null
+        );
+
+
+        PropertiesComponent propertiesComponent = PropertiesComponent.getInstance();
+        String lastPath = propertiesComponent.getValue("vinject.last.project.location", System.getProperty("user.home"));
+        locationProperty.set(lastPath);
+        context.setProjectName(artifactIdProperty.get());
 
         // Sync properties with context
         updateContext();
@@ -134,6 +134,7 @@ public class ProjectWizardStep extends AbstractNewProjectWizardStep {
                             }
                             artifactIdProperty.set(artifactId);
                             context.putUserData(ARTIFACT_ID_KEY, artifactId);
+                            updateContext();
                             return Unit.INSTANCE;
                         });
                         return Unit.INSTANCE;
@@ -156,36 +157,68 @@ public class ProjectWizardStep extends AbstractNewProjectWizardStep {
                 panel.row("Location:", new Function1<Row, Unit>() {
                     @Override
                     public Unit invoke(Row row) {
-                        // Location text field
-                        JBTextField locationField = new JBTextField();
-                        row.cell(locationField);
-
-                        // Create a file chooser button
-                        JButton fileChooserButton = new JButton("Choose Location");
-
-                        fileChooserButton.addActionListener(e -> {
-                            // Create a FileChooserDescriptor (to select directories only)
-                            FileChooserDescriptor descriptor = new FileChooserDescriptor(false, true, false, false, false, false);
-                            descriptor.setTitle("Select Location");
-
-                            // Use IntelliJ's FileChooser to open the file picker dialog
-                            VirtualFile selectedFile = FileChooser.chooseFile(descriptor, null, null);
-
-                            if (selectedFile != null) {
-                                // Set the selected directory path in the location field
-                                locationField.setText(selectedFile.getPath());
-                                locationProperty.set(selectedFile.getPath());
-                                context.setProjectFileDirectory(new File(selectedFile.getPath(), artifactIdProperty.get()).toPath(), true);
-                            }
-                        });
-
-                        row.cell(fileChooserButton);
+                        addLocationField(panel);
                         return Unit.INSTANCE;
                     }
                 });
 
+                panel.row("JDK:", row -> {
+                    // Use a proper SDK filter function instead of method reference
+                    row.cell(jdkComboBox);
+                    return Unit.INSTANCE;
+                });
+
                 return Unit.INSTANCE;
             }
+        });
+    }
+
+    private void addLocationField(Panel panel) {
+        panel.row("Location:", row -> {
+            // Create descriptor for single folder selection
+            FileChooserDescriptor descriptor = FileChooserDescriptorFactory.createSingleFolderDescriptor();
+            descriptor.setTitle("Select Project Location");
+            descriptor.setDescription("Choose directory for your new project");
+
+            PropertiesComponent propertiesComponent = PropertiesComponent.getInstance();
+            String lastPath = propertiesComponent.getValue("vinject.last.project.location", System.getProperty("user.home"));
+            locationProperty.set(lastPath);
+
+            // Create text field with browse button
+            TextFieldWithBrowseButton locationChooser = new TextFieldWithBrowseButton(locationField);
+            locationChooser.addBrowseFolderListener(
+                    context.getProject(),
+                    descriptor,
+                    TextComponentAccessor.TEXT_FIELD_WHOLE_TEXT
+            );
+
+            // Update property when text field changes
+            locationField.getDocument().addDocumentListener(new DocumentAdapter() {
+                @Override
+                protected void textChanged(@NotNull DocumentEvent e) {
+                    String path = locationField.getText();
+                    // Update UI immediately (EDT-safe)
+                    locationField.setText(path);
+
+                    // Update model in write-safe context with proper modality
+                    ApplicationManager.getApplication().invokeLater(() -> {
+                        ApplicationManager.getApplication().runWriteAction(() -> {
+                            locationProperty.set(path);
+                            propertiesComponent.setValue("vinject.last.project.location", path);
+                            updateContext();
+                        });
+                    }, ModalityState.defaultModalityState());
+                }
+            });
+
+            // Initial value
+            locationField.setText(locationProperty.get());
+
+            // Add to row and configure
+            row.cell(locationChooser)
+                    .align(AlignX.FILL);
+
+            return Unit.INSTANCE;
         });
     }
 
@@ -199,45 +232,25 @@ public class ProjectWizardStep extends AbstractNewProjectWizardStep {
         return artifactId != null && !artifactId.trim().isEmpty();
     }
 
-    private void onProjectNameChanged(String text) {
-        context.setProjectName(text);
-        updateArtifactId(text);
-        updateLocation(text);
-    }
-
-    private void onLocationChanged(String text) {
-        context.setProjectFileDirectory(Path.of(text), true);
-    }
-
     private boolean isSuitableSdkType(SdkTypeId sdkTypeId) {
         return sdkTypeId.getName().contains("Java");
     }
 
-    private void updateArtifactId(String projectName) {
-        if (projectName != null && !projectName.isEmpty()) {
-            String sanitized = projectName.toLowerCase().replaceAll("[^a-z0-9]", "");
-            artifactIdProperty.set(sanitized);
-            context.putUserData(ARTIFACT_ID_KEY, sanitized);
-        }
-    }
-
-    private void updateLocation(String projectName) {
-        if (projectName != null && !projectName.isEmpty()) {
-            String newLocation = System.getProperty("user.home") + "/" + projectName;
-            locationProperty.set(newLocation);
-            context.setProjectFileDirectory(Path.of(newLocation), true);
-        }
-    }
-
     private void updateContext() {
-        context.setProjectFileDirectory(Path.of(locationProperty.get()), true);
         context.putUserData(GROUP_ID_KEY, groupIdProperty.get());
         context.putUserData(ARTIFACT_ID_KEY, artifactIdProperty.get());
+
+        context.setProjectName(artifactIdProperty.get());
+        context.setProjectFileDirectory(new File(locationProperty.get(), artifactIdProperty.get()).toPath(), true);
+
+        Sdk selectedSdk = jdkComboBox.getSelectedJdk();
+        if (selectedSdk != null) {
+            context.setProjectJdk(selectedSdk);
+        }
     }
 
     @Override
     public void setupProject(@NotNull Project project) {
-
 
         String groupId = context.getUserData(ProjectWizardStep.GROUP_ID_KEY);
         String artifactId = context.getUserData(ProjectWizardStep.ARTIFACT_ID_KEY);
@@ -248,10 +261,10 @@ public class ProjectWizardStep extends AbstractNewProjectWizardStep {
 
         //Create base directory if it doesn't exist
         if (!baseDir.exists()) {
-            System.out.println("Creating directory: " + baseDir);
+            logger.info("Creating directory: " + baseDir);
             baseDir.mkdirs();
         }
-        System.out.println("Base directory: " + baseDir);
+        logger.info("Creating project: " + artifactId + " with groupId: " + groupId + " at location: " + baseDir);
 
         try {
             String pluginYml = new String(Plugin.class.getResourceAsStream("/projectWizard/multi/plugin.yml").readAllBytes(), StandardCharsets.UTF_8);
@@ -399,19 +412,28 @@ public class ProjectWizardStep extends AbstractNewProjectWizardStep {
 
             }
         } catch (Exception e) {
+            logger.error("Error creating project", e);
             e.printStackTrace();
         }
+    }
 
-        // After creating the project
-//        SwingUtilities.invokeLater(() -> {
-//            // Request focus back to IDE
-//            Component parent = SwingUtilities.getWindowAncestor(locationField);
-//            if (parent != null) {
-//                parent.requestFocus();
-//            }
-//
-//            // Use IntelliJ's APIs to open the project
-//            ProjectUtil.openOrImport(baseDir.getAbsolutePath(), project, true);
-//        });
+    @Override
+    public @NotNull WizardContext getContext() {
+        return context;
+    }
+
+    @Override
+    public @NotNull PropertyGraph getPropertyGraph() {
+        return new PropertyGraph();
+    }
+
+    @Override
+    public @NotNull Keywords getKeywords() {
+        return new Keywords();
+    }
+
+    @Override
+    public @NotNull UserDataHolder getData() {
+        return context;
     }
 }

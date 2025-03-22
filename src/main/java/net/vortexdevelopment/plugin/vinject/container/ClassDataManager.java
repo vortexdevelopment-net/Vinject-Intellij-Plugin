@@ -1,60 +1,32 @@
 package net.vortexdevelopment.plugin.vinject.container;
 
-import com.intellij.lang.java.JavaLanguage;
 import com.intellij.openapi.module.Module;
 import com.intellij.openapi.module.ModuleManager;
 import com.intellij.openapi.project.DumbService;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.roots.ModuleRootManager;
 import com.intellij.openapi.vfs.VirtualFile;
-import com.intellij.psi.JavaElementVisitor;
-import com.intellij.psi.JavaPsiFacade;
 import com.intellij.psi.PsiAnnotation;
 import com.intellij.psi.PsiAnnotationMemberValue;
 import com.intellij.psi.PsiArrayInitializerMemberValue;
 import com.intellij.psi.PsiClass;
 import com.intellij.psi.PsiClassObjectAccessExpression;
-import com.intellij.psi.PsiCodeBlock;
-import com.intellij.psi.PsiElementFactory;
-import com.intellij.psi.PsiElementVisitor;
-import com.intellij.psi.PsiExpression;
-import com.intellij.psi.PsiField;
 import com.intellij.psi.PsiFile;
 import com.intellij.psi.PsiJavaFile;
-import com.intellij.psi.PsiMethod;
-import com.intellij.psi.PsiModifier;
-import com.intellij.psi.PsiModifierList;
 import com.intellij.psi.PsiNameValuePair;
-import com.intellij.psi.PsiParameterList;
-import com.intellij.psi.PsiSubstitutor;
-import com.intellij.psi.PsiType;
 import com.intellij.psi.PsiTypeElement;
-import com.intellij.psi.PsiTypes;
-import com.intellij.psi.impl.light.LightFieldBuilder;
-import com.intellij.psi.impl.light.LightMethod;
-import com.intellij.psi.impl.light.LightMethodBuilder;
-import com.intellij.psi.impl.light.LightModifierList;
-import com.intellij.psi.impl.light.LightParameter;
-import com.intellij.psi.impl.light.LightParameterListBuilder;
-import com.intellij.psi.search.GlobalSearchScope;
 import net.vortexdevelopment.plugin.vinject.Plugin;
 import net.vortexdevelopment.plugin.vinject.templates.TemplateManager;
-import org.gradle.api.publish.maven.MavenDependency;
-import org.gradle.buildinit.plugins.internal.modifiers.Language;
-import org.gradle.plugins.ide.idea.model.Dependency;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
-import org.jetbrains.idea.maven.project.MavenProject;
 
 import java.util.ArrayList;
-import java.util.Collections;
 import java.util.List;
 import java.util.Locale;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
-import java.util.stream.Stream;
 
 public class ClassDataManager {
 

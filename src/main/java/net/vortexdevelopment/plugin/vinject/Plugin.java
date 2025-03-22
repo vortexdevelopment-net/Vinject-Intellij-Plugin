@@ -16,7 +16,6 @@ import kotlin.Unit;
 import kotlin.coroutines.Continuation;
 import net.vortexdevelopment.plugin.vinject.container.ClassDataManager;
 import net.vortexdevelopment.plugin.vinject.syntax.AnnotationChangeListener;
-import net.vortexdevelopment.plugin.vinject.templates.TemplateManager;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -142,6 +141,12 @@ public class Plugin implements ProjectActivity, Disposable  {
         Application application = ApplicationManager.getApplication();
         if (!application.isWriteAccessAllowed()) return;
         application.runWriteAction(runnable);
+    }
+
+    public static void runReadAction(Runnable runnable) {
+        Application application = ApplicationManager.getApplication();
+        if (!application.isReadAccessAllowed()) return;
+        application.runReadAction(runnable);
     }
 
     @Override

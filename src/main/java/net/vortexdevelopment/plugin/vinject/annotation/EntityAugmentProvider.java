@@ -1,6 +1,5 @@
 package net.vortexdevelopment.plugin.vinject.annotation;
 
-import com.github.weisj.jsvg.T;
 import com.intellij.lang.java.JavaLanguage;
 import com.intellij.openapi.project.Project;
 import com.intellij.psi.JavaPsiFacade;
@@ -18,12 +17,10 @@ import com.intellij.psi.PsiTypes;
 import com.intellij.psi.augment.PsiAugmentProvider;
 import com.intellij.psi.impl.light.LightFieldBuilder;
 import com.intellij.psi.impl.light.LightMethodBuilder;
-import com.intellij.psi.search.GlobalSearchScope;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.Collections;
 import java.util.List;
 

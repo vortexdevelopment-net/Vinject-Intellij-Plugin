@@ -1,7 +1,7 @@
 plugins {
     id("java")
     id("org.jetbrains.kotlin.jvm") version "1.9.25"
-    id("org.jetbrains.intellij") version "1.17.4"
+    id("org.jetbrains.intellij.platform") version "2.3.0"
 }
 
 group = "net.vortexdevelopment"
@@ -10,10 +10,18 @@ version = "1.0-SNAPSHOT"
 repositories {
     mavenLocal()
     mavenCentral()
+    intellijPlatform {
+        defaultRepositories()
+    }
 }
 
 dependencies {
     implementation("org.jetbrains:annotations:26.0.1")
+    intellijPlatform {
+        intellijIdeaUltimate("2024.3.5")
+
+        bundledPlugin("com.intellij.java")
+    }
 }
 
 java {
@@ -23,12 +31,12 @@ java {
 
 // Configure Gradle IntelliJ Plugin
 // Read more: https://plugins.jetbrains.com/docs/intellij/tools-gradle-intellij-plugin.html
-intellij {
-    version.set("2023.2.8")
-    type.set("IC") // Target IDE Platform
-
-    plugins.set(listOf("java", "maven", "gradle"))
-}
+//intellij {
+//    version.set("2024.2")
+//    type.set("IC") // Target IDE Platform
+//
+//    plugins.set(listOf("java", "maven", "gradle"))
+//}
 
 sourceSets {
     main {

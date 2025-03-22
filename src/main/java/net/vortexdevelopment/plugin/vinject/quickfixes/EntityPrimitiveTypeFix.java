@@ -14,8 +14,6 @@ import com.intellij.psi.PsiTypeElement;
 import net.vortexdevelopment.plugin.vinject.Plugin;
 import org.jetbrains.annotations.NotNull;
 
-import javax.lang.model.element.Element;
-
 public class EntityPrimitiveTypeFix implements LocalQuickFix {
 
     @Override
