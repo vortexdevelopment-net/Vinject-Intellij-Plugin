@@ -99,6 +99,11 @@ public class AnnotationChangeListener implements PsiTreeChangeListener {
 
     @Override
     public void childrenChanged(@NotNull PsiTreeChangeEvent event) {
+        //Check if container is already disposed
+        if (Plugin.getProject().isDisposed()) {
+            return;
+        }
+
         if (DumbService.isDumb(Plugin.getProject())) {
             DumbService.getInstance(Plugin.getProject()).runWhenSmart(() -> {
                 childrenChanged(event);
