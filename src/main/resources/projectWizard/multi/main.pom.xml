@@ -161,7 +161,7 @@
 
     <dependencies>
         <dependency>
-            <groupId>net.vortexdevelopment</groupId>
+            <groupId>$GROUP_ID$</groupId>
             <artifactId>$ARTIFACT_ID$-API</artifactId>
             <version>1.0.0-SNAPSHOT</version>
             <scope>compile</scope>

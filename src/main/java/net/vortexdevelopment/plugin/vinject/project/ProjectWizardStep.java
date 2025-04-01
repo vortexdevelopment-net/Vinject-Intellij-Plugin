@@ -328,7 +328,7 @@ public class ProjectWizardStep implements NewProjectWizardStep {
                 apiSrcMainJava.mkdirs();
 
                 //Create groupIdLower.artifactIdLower.api package
-                File apiPackage = new File(apiSrcMainJava, groupIdLower + "/" + artifactId.toLowerCase(Locale.ENGLISH) + "/api");
+                File apiPackage = new File(apiSrcMainJava, groupIdLower.replace(".", "/") + "/" + artifactId.toLowerCase(Locale.ENGLISH) + "/api");
                 apiPackage.mkdirs();
 
                 //Create java api file with ArtifactIdApi.java
@@ -347,7 +347,7 @@ public class ProjectWizardStep implements NewProjectWizardStep {
                 pluginSrcMainJava.mkdirs();
 
                 //Create groupIdLower.artifactIdLower package
-                File pluginPackage = new File(pluginSrcMainJava, groupIdLower + "/" + artifactId.toLowerCase(Locale.ENGLISH));
+                File pluginPackage = new File(pluginSrcMainJava, groupIdLower.replace(".", "/") + "/" + artifactId.toLowerCase(Locale.ENGLISH));
                 pluginPackage.mkdirs();
 
                 //Create java main file with Main.java
