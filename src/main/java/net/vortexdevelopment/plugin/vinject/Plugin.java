@@ -15,7 +15,11 @@ import com.intellij.psi.PsiManager;
 import kotlin.Unit;
 import kotlin.coroutines.Continuation;
 import net.vortexdevelopment.plugin.vinject.container.ClassDataManager;
+import net.vortexdevelopment.plugin.vinject.discord.DiscordHook;
+import net.vortexdevelopment.plugin.vinject.discord.DiscordActivityManager;
+import net.vortexdevelopment.plugin.vinject.discord.DiscordSettings;
 import net.vortexdevelopment.plugin.vinject.syntax.AnnotationChangeListener;
+import net.vortexdevelopment.plugin.vinject.templates.TemplateManager;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
@@ -31,106 +35,87 @@ public class Plugin implements ProjectActivity, Disposable  {
     private static boolean multipleRoots = false;
     private static String rootPackage = "";
     private static Project project;
+    private static DiscordActivityManager globalDiscordActivityManager;
+    private static boolean discordInitialized = false;
     private AnnotationChangeListener annotationChangeListener;
-
 
     @Override
     public @Nullable Object execute(@NotNull Project project, @NotNull Continuation<? super Unit> continuation) {
         this.project = project;
 
-        //Await indexing
-        DumbService.getInstance(project).waitForSmartMode();
+        // Schedule scanning and template reload after indexing completes to ensure modules and library roots are available
+        DumbService.getInstance(project).runWhenSmart(() -> {
+            ApplicationManager.getApplication().runReadAction((Computable<List<VirtualFile>>) () -> {
 
-        //Find @Root annotated classes
-        ApplicationManager.getApplication().runReadAction((Computable<List<VirtualFile>>) () -> {
+                // Ensure templates from dependency jars are loaded on startup
+                TemplateManager.getInstance().reloadTemplates(project);
 
-            long start = System.currentTimeMillis();
-            List<VirtualFile> roots = new ArrayList<>();
-            ProjectFileIndex projectFileIndex = ProjectRootManager.getInstance(project).getFileIndex();
+                long start = System.currentTimeMillis();
+                List<VirtualFile> roots = new ArrayList<>();
+                ProjectFileIndex projectFileIndex = ProjectRootManager.getInstance(project).getFileIndex();
 
-            projectFileIndex.iterateContent(file -> {
-                if (projectFileIndex.isInSource(file) && !projectFileIndex.isInTestSourceContent(file) && !file.getPath().contains("resources") && !file.getPath().contains("target")) {
-                    roots.add(file);
+                projectFileIndex.iterateContent(file -> {
+                    if (projectFileIndex.isInSource(file) && !projectFileIndex.isInTestSourceContent(file) && !file.getPath().contains("resources") && !file.getPath().contains("target")) {
+                        roots.add(file);
+                    }
+                    return true; // Continue iteration
+                });
+
+                for (VirtualFile virtualFile : roots) {
+                    PsiFile psiFile = PsiManager.getInstance(project).findFile(virtualFile);
+                    ClassDataManager.processFileChange(psiFile);
                 }
-                return true; // Continue iteration
+                return roots;
             });
-
-            for (VirtualFile virtualFile : roots) {
-                PsiFile psiFile = PsiManager.getInstance(project).findFile(virtualFile);
-                ClassDataManager.processFileChange(psiFile);
-
-//                if (psiFile instanceof PsiJavaFile) {
-//                    PsiClass[] classes = ((PsiJavaFile) psiFile).getClasses();
-//                    for (PsiClass psi : classes) {
-//                        //Check if a component class, if so add it to the bean classes list
-//                        if (isComponentClass(psi)) {
-//                            BEAN_CLASSES.add(psi.getQualifiedName());
-//                            if (isServiceClass(psi)) {
-//                                //Register beans
-//
-//                                //Find all @Bean annotated methods
-//                                PsiMethod[] methods = psi.getMethods();
-//                                for (PsiMethod method : methods) {
-//                                    if (method.getAnnotation("net.vortexdevelopment.vinject.annotation.Bean") != null) {
-//                                        if (method.getReturnType() instanceof PsiClassType psiClassType) {
-//                                            PsiClass psiClass = psiClassType.resolve();
-//                                            if (psiClass != null) {
-//                                                BEAN_CLASSES.add(psiClass.getQualifiedName());
-//                                                //Check if the annotation has registerSubclasses parameter, if so register those classes as well
-//                                                PsiAnnotation registerSubclassesAnnotation = method.getAnnotation("net.vortexdevelopment.vinject.annotation.Bean");
-//                                                if (registerSubclassesAnnotation != null) {
-//                                                    BEAN_CLASSES.addAll(getClassArray(registerSubclassesAnnotation, "registerSubclasses"));
-//                                                }
-//                                            }
-//                                        }
-//                                    }
-//                                }
-//                            }
-//                        }
-//
-//                        PsiAnnotation rootAnnotation = psi.getAnnotation("net.vortexdevelopment.vinject.annotation.Root");
-//                        if (rootAnnotation != null) {
-//                            //Add root class to Beans
-//                            BEAN_CLASSES.add(psi.getQualifiedName());
-//
-//                            //Get annotation and get packageName parameter
-//                            String packageName = psi.getAnnotation("net.vortexdevelopment.vinject.annotation.Root").getParameterList().getAttributes()[0].getValue().getText();
-//                            if (rootPackage.isEmpty()) {
-//                                rootPackage = packageName.replace("\"", "");
-//                            } else {
-//                                //We found 2 roots, project isn't valid
-//                                multipleRoots = true;
-//                            }
-//
-//                            COMPONENT_ANNOTATIONS.addAll(getClassArray(rootAnnotation, "componentAnnotations"));
-//                        }
-//
-//                        //Regisry annotation
-//                        PsiAnnotation registryAnnotation = psi.getAnnotation("net.vortexdevelopment.vinject.annotation.Registry");
-//                        if (registryAnnotation != null && registryAnnotation.getParameterList().getAttributes().length > 0) {
-//                            COMPONENT_ANNOTATIONS.addAll(getClassArray(registryAnnotation, "annotation"));
-//                        }
-//
-//
-//                        PsiAnnotation componentAnnotation = psi.getAnnotation("net.vortexdevelopment.vinject.annotation.Component");
-//                        //Register all @Component classes as well as their subclasses if any
-//                        if (componentAnnotation != null && componentAnnotation.getParameterList().getAttributes().length > 0) {
-//                            BEAN_CLASSES.addAll(getClassArray(componentAnnotation, "registerSubclasses"));
-//                        }
-//                    }
-//                }
-            }
-            return roots;
         });
 
         this.annotationChangeListener = new AnnotationChangeListener();
         PsiManager.getInstance(project).addPsiTreeChangeListener(annotationChangeListener, this);
+
+        // Initialize Discord RPC globally (only once)
+        initializeDiscordRPCGlobal(project);
+
+        // As a final fallback ensure templates are reloaded once more on the EDT in case
+        // module/classpath roots become available slightly after startup.
+        ApplicationManager.getApplication().invokeLater(() -> TemplateManager.getInstance().reloadTemplates(project));
+
+        System.out.println("Plugin initialized successfully for project: " + project.getName());
 
         return null;
     }
 
     public static Project getProject() {
         return project;
+    }
+
+    /**
+     * Public method to trigger a rescan of the project files for VInject annotations.
+     * This can be called from actions or other UI components to force re-processing.
+     * @param proj Project to rescan
+     */
+    public static void rescanProject(Project proj) {
+        if (proj == null) return;
+        // Schedule the rescan to run when indexing (smart mode) is ready.
+        DumbService.getInstance(proj).runWhenSmart(() -> {
+            ApplicationManager.getApplication().runReadAction(() -> {
+                ProjectFileIndex projectFileIndex = ProjectRootManager.getInstance(proj).getFileIndex();
+                List<VirtualFile> roots = new ArrayList<>();
+                projectFileIndex.iterateContent(file -> {
+                    if (projectFileIndex.isInSource(file) && !projectFileIndex.isInTestSourceContent(file) && !file.getPath().contains("resources") && !file.getPath().contains("target")) {
+                        roots.add(file);
+                    }
+                    return true;
+                });
+                // Reload templates from dependencies before rescanning project files to ensure templates
+                // provided by library jars are available. This method avoids duplicate registration.
+                TemplateManager.getInstance().reloadTemplates(proj);
+
+                for (VirtualFile virtualFile : roots) {
+                    PsiFile psiFile = PsiManager.getInstance(proj).findFile(virtualFile);
+                    ClassDataManager.processFileChange(psiFile);
+                }
+            });
+        });
     }
 
     public static String getRootPackage() {
@@ -149,8 +134,66 @@ public class Plugin implements ProjectActivity, Disposable  {
         application.runReadAction(runnable);
     }
 
+    private void initializeDiscordRPCGlobal(Project project) {
+        // Only initialize once globally
+        if (discordInitialized) {
+            // Just switch the activity manager to the new project
+            if (globalDiscordActivityManager != null) {
+                globalDiscordActivityManager.switchToProject(project);
+            }
+            return;
+        }
+        
+        System.out.println("🔄 Starting Discord RPC initialization globally...");
+        
+        try {
+            // Check if Discord RPC is enabled in any project's settings
+            if (!DiscordHook.isEnabled(project)) {
+                System.out.println("Discord RPC is disabled in settings, skipping initialization");
+                return;
+            }
+            
+            System.out.println("🔧 Initializing Discord RPC globally...");
+            // Initialize Discord RPC globally
+            DiscordHook.init(project);
+            
+            System.out.println("🔗 Attempting to connect to Discord...");
+            // Connect to Discord
+            DiscordHook.connect().thenRun(() -> {
+                System.out.println("Discord connection successful! Starting global activity monitoring...");
+                try {
+                    // Start global activity monitoring
+                    DiscordSettings settings = DiscordSettings.getInstance(project);
+                    globalDiscordActivityManager = new DiscordActivityManager(project, settings);
+                    globalDiscordActivityManager.startMonitoring();
+                    discordInitialized = true;
+                    System.out.println("Discord global activity monitoring started successfully!");
+                } catch (Exception e) {
+                    System.err.println("Failed to start Discord activity monitoring: " + e.getMessage());
+                    e.printStackTrace();
+                }
+            }).exceptionally(throwable -> {
+                System.err.println("Discord connection failed: " + throwable.getMessage());
+                throwable.printStackTrace();
+                return null;
+            });
+        } catch (Exception e) {
+            // Discord RPC is optional, don't fail plugin startup if it fails
+            System.err.println("Failed to initialize Discord RPC: " + e.getMessage());
+            e.printStackTrace();
+        }
+    }
+
     @Override
     public void dispose() {
+        // Clean up Discord RPC globally (only when last project closes)
+        if (globalDiscordActivityManager != null) {
+            globalDiscordActivityManager.stopMonitoring();
+            globalDiscordActivityManager = null;
+        }
+        DiscordHook.shutdown();
+        discordInitialized = false;
+        
         PsiManager.getInstance(project).removePsiTreeChangeListener(annotationChangeListener);
     }
 }

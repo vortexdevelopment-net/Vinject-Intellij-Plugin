@@ -294,44 +294,90 @@ public class TemplateManager {
     }
 
     public void registerTemplateFromJar(String absolutePath) {
-        try (JarFile jarFile = new JarFile(absolutePath)) {
-            jarFile.stream()
-                    .forEach(entry -> {
-                        if (entry.getName().startsWith("vinject/templates/") && entry.getName().endsWith(".ft")) {
-                            try {
-                                String content = new String(jarFile.getInputStream(entry).readAllBytes(), StandardCharsets.UTF_8);
+        // Normalize possible URI or jar-root paths to a local filesystem path
+        String jarPath = absolutePath;
+        try {
+            if (jarPath.startsWith("file:")) {
+                try {
+                    jarPath = new java.io.File(new java.net.URI(jarPath)).getAbsolutePath();
+                } catch (Exception ignore) {
+                    // Fallback: strip file: prefix
+                    jarPath = jarPath.replaceFirst("file:", "");
+                }
+            }
+            // If path still contains the jar internal marker, convert to regular jar path
+            if (jarPath.contains(".jar!/")) {
+                jarPath = jarPath.replace(".jar!/", ".jar");
+            }
 
-                                // Get the filename without path
-                                String fileName = entry.getName().substring(entry.getName().lastIndexOf('/') + 1);
+            try (JarFile jarFile = new JarFile(jarPath)) {
+                jarFile.stream()
+                        .forEach(entry -> {
+                            if (entry.getName().startsWith("vinject/templates/") && entry.getName().endsWith(".ft")) {
+                                try {
+                                    String content = new String(jarFile.getInputStream(entry).readAllBytes(), StandardCharsets.UTF_8);
 
-                                // Remove the .ft extension
-                                fileName = fileName.substring(0, fileName.length() - 3);
+                                    // Get the filename without path
+                                    String fileName = entry.getName().substring(entry.getName().lastIndexOf('/') + 1);
 
-                                // Parse name and extension properly
-                                String templateName;
-                                String extension;
+                                    // Remove the .ft extension
+                                    fileName = fileName.substring(0, fileName.length() - 3);
 
-                                int dotIndex = fileName.lastIndexOf('.');
-                                if (dotIndex > 0) {
-                                    // Template has an extension like "SomeTemplate.java"
-                                    templateName = fileName.substring(0, dotIndex);
-                                    extension = fileName.substring(dotIndex + 1);
-                                } else {
-                                    // No extension in the template name
-                                    templateName = fileName;
-                                    extension = "txt";
+                                    // Parse name and extension properly
+                                    String templateName;
+                                    String extension;
+
+                                    int dotIndex = fileName.lastIndexOf('.');
+                                    if (dotIndex > 0) {
+                                        // Template has an extension like "SomeTemplate.java"
+                                        templateName = fileName.substring(0, dotIndex);
+                                        extension = fileName.substring(dotIndex + 1);
+                                    } else {
+                                        // No extension in the template name
+                                        templateName = fileName;
+                                        extension = "txt";
+                                    }
+
+                                    // Prevent duplicate registration: don't overwrite existing template
+                                    if (!templates.containsKey(templateName)) {
+                                        UnregisteredTemplate template = new UnregisteredTemplate(templateName, content, extension);
+                                        templates.put(templateName, template);
+                                    }
+                                } catch (IOException e) {
+                                    throw new RuntimeException(e);
                                 }
-
-                                // Register with correct name and extension
-                                UnregisteredTemplate template = new UnregisteredTemplate(templateName, content, extension);
-                                templates.put(templateName, template);
-                            } catch (IOException e) {
-                                throw new RuntimeException(e);
                             }
-                        }
-                    });
+                        });
+            }
         } catch (IOException e) {
-            throw new RuntimeException(e);
+            // Failed to open jar; ignore silently to avoid breaking startup
+        }
+    }
+
+    /**
+     * Reload templates from all dependencies currently present on the project's classpath.
+     * This will register templates found under vinject/templates/* inside dependency jars
+     * but will avoid duplicating templates already registered.
+     *
+     * @param project Current project to inspect
+     */
+    public void reloadTemplates(Project project) {
+        if (project == null) return;
+
+        // Iterate over modules and their class roots to find dependency jars
+        for (Module module : ModuleManager.getInstance(project).getModules()) {
+            ModuleRootManager rootManager = ModuleRootManager.getInstance(module);
+            for (VirtualFile classRoot : rootManager.orderEntries().getAllLibrariesAndSdkClassesRoots()) {
+                String path = classRoot.getPath();
+                try {
+                    String jarPath = path;
+                    if (path.contains(".jar!")) {
+                        jarPath = path.replace(".jar!/", ".jar");
+                    }
+                    registerTemplateFromJar(jarPath);
+                } catch (Exception ignored) {
+                }
+            }
         }
     }
 

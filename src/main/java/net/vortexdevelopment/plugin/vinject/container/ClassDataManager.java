@@ -40,6 +40,7 @@ public class ClassDataManager {
         COMPONENT_ANNOTATIONS.add("net.vortexdevelopment.vinject.annotation.Service");
         COMPONENT_ANNOTATIONS.add("net.vortexdevelopment.vinject.annotation.Component");
         COMPONENT_ANNOTATIONS.add("net.vortexdevelopment.vinject.annotation.Repository");
+        COMPONENT_ANNOTATIONS.add("net.vortexdevelopment.vinject.annotation.Api");
     }
 
     /**
@@ -89,7 +90,8 @@ public class ClassDataManager {
                         Project project = Plugin.getProject();
                         VirtualFile dependencyRoot = getDependencyRoot(project, groupId, artifactId, version);
                         if (dependencyRoot != null) {
-                            String absolutePath = dependencyRoot.getPath().replace(".jar!/", ".jar");
+                            String rawPath = dependencyRoot.getPath();
+                            String absolutePath = rawPath.replace(".jar!/", ".jar");
                             //Open the jar file and search for the vinject.templates directory to load templates
                             TemplateManager.getInstance().registerTemplateFromJar(absolutePath);
                         }

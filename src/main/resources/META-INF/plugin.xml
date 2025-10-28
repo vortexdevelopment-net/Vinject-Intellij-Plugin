@@ -40,6 +40,15 @@
                 order="last"
                 id="MY_PLUGIN_SINGLE_PAGE_BUILDER"/>
 
+        <!-- Discord RPC Configuration -->
+        <projectConfigurable 
+            id="discord.rpc.settings"
+            displayName="Discord Rich Presence"
+            parentId="other"
+            instance="net.vortexdevelopment.plugin.vinject.discord.DiscordSettingsConfigurable"/>
+        
+        <projectService serviceImplementation="net.vortexdevelopment.plugin.vinject.discord.DiscordSettings"/>
+
         <!--<compiler.inspectionValidator implementation="net.vortexdevelopment.plugin.vinject.build.VInjectInspectionValidator" order="first" id="vinject.component.validator"/>
         <lang.psiAugmentProvider implementation="net.vortexdevelopment.plugin.vinject.annotation.EntityAugmentProvider"/>
         <highlightErrorFilter implementation="net.vortexdevelopment.plugin.vinject.syntax.ErrorFilter"/>-->
@@ -51,6 +60,15 @@
                 text="VInject Component"
                 description="Create a new VInject component class">
             <add-to-group group-id="NewGroup1" anchor="after" relative-to-action="NewClass"/>
+        </action>
+        <action id="VInject.Reload"
+                class="net.vortexdevelopment.plugin.vinject.actions.ReloadVInjectAction"
+                text="Reload VInject"
+                description="Re-scan the project for VInject annotations"
+                icon="net.vortexdevelopment.plugin.vinject.utils.PluginIcons.PLUGIN_ICON">
+            <!-- Add to editor context menu and project view popup (cover common group IDs) -->
+            <add-to-group group-id="EditorPopupMenu" anchor="last"/>
+            <add-to-group group-id="ProjectViewPopupMenu" anchor="last"/>
         </action>
     </actions>
 </idea-plugin>
