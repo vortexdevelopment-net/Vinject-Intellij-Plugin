@@ -55,7 +55,7 @@ public class Plugin implements ProjectActivity, Disposable  {
                 ProjectFileIndex projectFileIndex = ProjectRootManager.getInstance(project).getFileIndex();
 
                 projectFileIndex.iterateContent(file -> {
-                    if (projectFileIndex.isInSource(file) && !projectFileIndex.isInTestSourceContent(file) && !file.getPath().contains("resources") && !file.getPath().contains("target")) {
+                    if (projectFileIndex.isInSource(file) && !file.getPath().contains("resources") && !file.getPath().contains("target")) {
                         roots.add(file);
                     }
                     return true; // Continue iteration
