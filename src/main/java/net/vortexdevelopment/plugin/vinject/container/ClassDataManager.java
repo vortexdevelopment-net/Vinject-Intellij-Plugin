@@ -42,6 +42,8 @@ public class ClassDataManager {
         COMPONENT_ANNOTATIONS.add("net.vortexdevelopment.vinject.annotation.Repository");
         COMPONENT_ANNOTATIONS.add("net.vortexdevelopment.vinject.annotation.Api");
         COMPONENT_ANNOTATIONS.add("net.vortexdevelopment.vinject.annotation.Injectable");
+        COMPONENT_ANNOTATIONS.add("net.vortexdevelopment.vinject.annotation.yaml.YamlConfiguration");
+        COMPONENT_ANNOTATIONS.add("net.vortexdevelopment.vinject.annotation.yaml.YamlDirectory");
     }
 
     /**
