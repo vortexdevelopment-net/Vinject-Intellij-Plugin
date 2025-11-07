@@ -106,7 +106,7 @@ public class ComponentHighlighter extends AbstractBaseJavaLocalInspectionTool {
             if (constructor.getParameterList().getParameters().length == 0) {
                 continue;
             }
-            if (!ClassDataManager.isComponentClass(psiClass)) {
+            if (!ClassDataManager.isComponentClass(psiClass) || psiClass.getAnnotation("net.vortexdevelopment.vinject.annotation.Injectable") != null) {
                 continue;
             }
             for (PsiParameter parameter : constructor.getParameterList().getParameters()) {
