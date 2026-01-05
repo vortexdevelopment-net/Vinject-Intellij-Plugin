@@ -362,21 +362,39 @@ public class DiscordSettingsConfigurable implements Configurable {
         @Override
         public void actionPerformed(ActionEvent e) {
             testConnectionButton.setEnabled(false);
+            connectionStatusLabel.setForeground(Color.BLACK);
             connectionStatusLabel.setText("Testing connection...");
-            
+
+            // Apply current UI values to settings (so test uses what's on screen)
+            try {
+                if (settings != null) {
+                    settings.setDiscordRpcEnabled(enabledCheckBox.isSelected());
+                    settings.setDiscordClientId(discordClientIdField.getText().trim());
+                }
+            } catch (Exception ignored) { }
+
+            // Run the actual connection test
             SwingUtilities.invokeLater(() -> {
                 try {
-                    if (DiscordHook.isConnected()) {
-                        connectionStatusLabel.setText("✓ Connected to Discord");
-                        connectionStatusLabel.setForeground(Color.GREEN);
-                    } else {
-                        connectionStatusLabel.setText("✗ Not connected to Discord");
-                        connectionStatusLabel.setForeground(Color.RED);
-                    }
+                    DiscordHook.testConnection(project);
+
+                    // Poll for result a short time since connect/presence are async
+                    new Thread(() -> {
+                        try { Thread.sleep(6000); } catch (InterruptedException ignored) {}
+                        SwingUtilities.invokeLater(() -> {
+                            if (DiscordHook.isConnected()) {
+                                connectionStatusLabel.setText("✓ Connected to Discord");
+                                connectionStatusLabel.setForeground(Color.GREEN);
+                            } else {
+                                connectionStatusLabel.setText("✗ Connection failed");
+                                connectionStatusLabel.setForeground(Color.RED);
+                            }
+                            testConnectionButton.setEnabled(true);
+                        });
+                    }, "Discord-Test-Poll").start();
                 } catch (Exception ex) {
-                    connectionStatusLabel.setText("✗ Connection failed");
+                    connectionStatusLabel.setText("✗ Connection failed: " + ex.getMessage());
                     connectionStatusLabel.setForeground(Color.RED);
-                } finally {
                     testConnectionButton.setEnabled(true);
                 }
             });

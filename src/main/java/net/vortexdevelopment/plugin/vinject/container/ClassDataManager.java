@@ -31,10 +31,15 @@ import java.util.concurrent.ConcurrentHashMap;
 public class ClassDataManager {
 
     public static final Set<String> COMPONENT_ANNOTATIONS = ConcurrentHashMap.newKeySet();
+    public static final Set<String> COMPONENT_ANNOTATION_PACKAGES = Set.of(
+            "net.vortexdevelopment.vinject.annotation.component",
+            "net.vortexdevelopment.vortexcore.vinject.annotation",
+            "net.vortexdevelopment.vortexcore.command.annotation"
+    );
     private static Map<String, ClassData> classData = new ConcurrentHashMap<>();
 
     static {
-        // Pre-register the standard annotations
+        // Pre-register the standard annotations - Legacy support
         COMPONENT_ANNOTATIONS.add("net.vortexdevelopment.vinject.annotation.Root");
         COMPONENT_ANNOTATIONS.add("net.vortexdevelopment.vinject.annotation.Registry");
         COMPONENT_ANNOTATIONS.add("net.vortexdevelopment.vinject.annotation.Service");
@@ -42,6 +47,7 @@ public class ClassDataManager {
         COMPONENT_ANNOTATIONS.add("net.vortexdevelopment.vinject.annotation.Repository");
         COMPONENT_ANNOTATIONS.add("net.vortexdevelopment.vinject.annotation.Api");
         COMPONENT_ANNOTATIONS.add("net.vortexdevelopment.vinject.annotation.Injectable");
+        COMPONENT_ANNOTATIONS.add("net.vortexdevelopment.vinject.annotation.util.Injectable");
         COMPONENT_ANNOTATIONS.add("net.vortexdevelopment.vinject.annotation.yaml.YamlConfiguration");
         COMPONENT_ANNOTATIONS.add("net.vortexdevelopment.vinject.annotation.yaml.YamlDirectory");
     }
@@ -49,7 +55,7 @@ public class ClassDataManager {
     /**
      * Process all annotations in a file and register new component annotations
      */
-    public static void processFileChange(@org.jetbrains.annotations.Nullable PsiFile psiFile) {
+    public static void processFileChange(@Nullable PsiFile psiFile) {
         if (psiFile == null || psiFile.getVirtualFile() == null) return;
 
         if (DumbService.isDumb(psiFile.getProject())) {
@@ -61,7 +67,16 @@ public class ClassDataManager {
         }
 
         if (psiFile instanceof PsiJavaFile psiJavaFile) {
+            // Quick validation: skip if file is not valid or not a Java file
+            if (!psiJavaFile.isValid()) {
+                return;
+            }
+            
+            // Optimize: get classes array once and reuse
             PsiClass[] classes = psiJavaFile.getClasses();
+            if (classes.length == 0) {
+                return; // Early exit if no classes
+            }
             for (PsiClass psi : classes) {
                 // Process Registry annotations to discover new component annotations
                 PsiAnnotation registryAnnotation = psi.getAnnotation("net.vortexdevelopment.vinject.annotation.Registry");
@@ -73,7 +88,7 @@ public class ClassDataManager {
                 }
 
                 // Process Root annotations
-                PsiAnnotation rootAnnotation = psi.getAnnotation("net.vortexdevelopment.vinject.annotation.Root");
+                PsiAnnotation rootAnnotation = psi.getAnnotation("net.vortexdevelopment.vinject.annotation.component.Root");
                 if (rootAnnotation != null) {
                     ClassData classData = new ClassData(psi, rootAnnotation);
                     List<String> componentAnnotations = getClassArray(rootAnnotation, "componentAnnotations");
@@ -85,12 +100,20 @@ public class ClassDataManager {
                     PsiAnnotation[] registerTemplateAnnotations = ClassDataManager.getAnnotationArray(rootAnnotation, "templateDependencies");
                     for (PsiAnnotation registerTemplateAnnotation : registerTemplateAnnotations) {
                         //print values artifactId, groupId, version
-                        String artifactId = registerTemplateAnnotation.findAttributeValue("artifactId").getText();
-                        String groupId = registerTemplateAnnotation.findAttributeValue("groupId").getText();
-                        String version = registerTemplateAnnotation.findAttributeValue("version").getText();
+                        PsiAnnotationMemberValue artifactIdValue = registerTemplateAnnotation.findAttributeValue("artifactId");
+                        PsiAnnotationMemberValue groupIdValue = registerTemplateAnnotation.findAttributeValue("groupId");
+                        PsiAnnotationMemberValue versionValue = registerTemplateAnnotation.findAttributeValue("version");
+
+                        if (artifactIdValue == null || groupIdValue == null || versionValue == null) {
+                            continue;
+                        }
+
+                        String artifactId = artifactIdValue.getText();
+                        String groupId = groupIdValue.getText();
+                        String version = versionValue.getText();
 
                         //Check classpath for the dependency
-                        Project project = Plugin.getProject();
+                        Project project = psi.getProject();
                         VirtualFile dependencyRoot = getDependencyRoot(project, groupId, artifactId, version);
                         if (dependencyRoot != null) {
                             String rawPath = dependencyRoot.getPath();
@@ -107,22 +130,39 @@ public class ClassDataManager {
                 // Process RegisterTemplate annotations
                 PsiAnnotation registerTemplateAnnotation = psi.getAnnotation("net.vortexdevelopment.vinject.annotation.RegisterTemplate");
                 if (registerTemplateAnnotation != null) {
-                    String annotationFqcn = registerTemplateAnnotation.findAttributeValue("annotationFqcn").getText();
-                    String resource = registerTemplateAnnotation.findAttributeValue("resource").getText();
-                    String name = registerTemplateAnnotation.findAttributeValue("name").getText();
-                    TemplateManager.getInstance().registerTemplateFromFile(resource, name, annotationFqcn);
+                    PsiAnnotationMemberValue annotationFqcnValue = registerTemplateAnnotation.findAttributeValue("annotationFqcn");
+                    PsiAnnotationMemberValue resourceValue = registerTemplateAnnotation.findAttributeValue("resource");
+                    PsiAnnotationMemberValue nameValue = registerTemplateAnnotation.findAttributeValue("name");
+                    
+                    if (annotationFqcnValue != null && resourceValue != null && nameValue != null) {
+                        String annotationFqcn = annotationFqcnValue.getText();
+                        String resource = resourceValue.getText();
+                        String name = nameValue.getText();
+                        TemplateManager.getInstance().registerTemplateFromFile(resource, name, annotationFqcn, psi.getProject());
+                    }
                     continue;
                 }
 
                 // Check for any component annotation
+                // Check for any component annotation
                 boolean isComponent = false;
-                for (String annotationFqn : COMPONENT_ANNOTATIONS) {
-                    PsiAnnotation annotation = psi.getAnnotation(annotationFqn);
-                    if (annotation != null) {
-                        ClassData classData = new ClassData(psi, annotation);
-                        addClassData(psi, classData);
-                        isComponent = true;
-                        break;
+                for (PsiAnnotation annotation : psi.getAnnotations()) {
+                    String annotationFqn = annotation.getQualifiedName();
+                    if (annotationFqn != null) {
+                        boolean isPackageMatch = false;
+                        for (String pkg : COMPONENT_ANNOTATION_PACKAGES) {
+                            if (annotationFqn.startsWith(pkg + ".")) {
+                                isPackageMatch = true;
+                                break;
+                            }
+                        }
+                        
+                        if (COMPONENT_ANNOTATIONS.contains(annotationFqn) || isPackageMatch) {
+                            ClassData classData = new ClassData(psi, annotation);
+                            addClassData(psi, classData);
+                            isComponent = true;
+                            break;
+                        }
                     }
                 }
 
@@ -220,12 +260,25 @@ public class ClassDataManager {
                 return true;
             }
         }
+        for (PsiAnnotation annotation : psiClass.getAnnotations()) {
+            String qName = annotation.getQualifiedName();
+            if (qName != null) {
+                for (String pkg : COMPONENT_ANNOTATION_PACKAGES) {
+                    if (qName.startsWith(pkg + ".")) {
+                        return true;
+                    }
+                }
+            }
+        }
         return false;
     }
 
     public static boolean isComponentAnnotation(@NotNull PsiAnnotation annotation) {
-        for (String componentAnnotation : COMPONENT_ANNOTATIONS) {
-            if (Objects.equals(annotation.getQualifiedName(), componentAnnotation)) {
+        String qName = annotation.getQualifiedName();
+        if (qName == null) return false;
+        if (COMPONENT_ANNOTATIONS.contains(qName)) return true;
+        for (String pkg : COMPONENT_ANNOTATION_PACKAGES) {
+            if (qName.startsWith(pkg + ".")) {
                 return true;
             }
         }
@@ -257,14 +310,19 @@ public class ClassDataManager {
 
     public static List<String> getClassArray(PsiAnnotation annotation, String propertyName) {
         List<String> subClasses = new ArrayList<>();
+        if (!annotation.isValid()) return subClasses;
         PsiNameValuePair[] attributes = annotation.getParameterList().getAttributes();
         for (PsiNameValuePair attribute : attributes) {
-            // Check if the attribute name is 'registerSubclasses'
+            // Check if the attribute name matches propertyName
             if (propertyName.equals(attribute.getName())) {
                 PsiAnnotationMemberValue value = attribute.getValue();
                 if (value instanceof PsiClassObjectAccessExpression objectValue) {
                     //Single value
-                    subClasses.add(objectValue.getOperand().getType().getCanonicalText());
+                    try {
+                        subClasses.add(objectValue.getOperand().getType().getCanonicalText());
+                    } catch (Exception e) {
+                        // Ignore potential StubTextInconsistencyException or other PSI issues
+                    }
                 }
                 if (value instanceof PsiArrayInitializerMemberValue arrayValue) {
                     //Array value
@@ -273,9 +331,13 @@ public class ClassDataManager {
                     for (PsiAnnotationMemberValue arrayElement : arrayElements) {
                         if (arrayElement instanceof PsiClassObjectAccessExpression classExpr) {
                             // Extract the class from the PsiClassObjectAccessExpression
-                            PsiTypeElement typeElement = classExpr.getOperand();
-                            String className = typeElement.getType().getCanonicalText();
-                            subClasses.add(className);
+                            try {
+                                PsiTypeElement typeElement = classExpr.getOperand();
+                                String className = typeElement.getType().getCanonicalText();
+                                subClasses.add(className);
+                            } catch (Exception e) {
+                                // Ignore potential StubTextInconsistencyException or other PSI issues
+                            }
                         }
                     }
                 }

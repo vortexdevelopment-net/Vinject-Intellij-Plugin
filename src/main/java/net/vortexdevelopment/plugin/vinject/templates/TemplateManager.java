@@ -141,9 +141,9 @@ public class TemplateManager {
      * @param resourcePath Path to the template file (relative to resource roots)
      * @param templateName Name to register the template as
      * @param annotationFqcn FQN of the annotation this template is for
+     * @param project Current project
      */
-    public void registerTemplateFromFile(String resourcePath, String templateName, String annotationFqcn) {
-        Project project = Plugin.getProject();
+    public void registerTemplateFromFile(String resourcePath, String templateName, String annotationFqcn, Project project) {
         if (project == null) return;
 
         // Clean up quoted strings from annotation values

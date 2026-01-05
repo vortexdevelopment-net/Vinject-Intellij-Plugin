@@ -1,8 +1,8 @@
 package $PACKAGE$;
 
-import net.vortexdevelopment.vinject.annotation.Component;
+import net.vortexdevelopment.vortexcore.vinject.annotation.Api;
 
-@Component
+@Api
 public final class $CLASS_NAME$ {
 
 }

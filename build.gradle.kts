@@ -3,7 +3,7 @@ import org.jetbrains.kotlin.ir.backend.js.compile
 plugins {
     id("java")
     id("org.jetbrains.kotlin.jvm") version "1.9.25"
-    id("org.jetbrains.intellij.platform") version "2.3.0"
+    id("org.jetbrains.intellij.platform") version "2.6.0"
     id("com.github.johnrengelman.shadow") version "8.1.1"
 }
 
@@ -22,27 +22,20 @@ repositories {
 
 dependencies {
     implementation("org.jetbrains:annotations:26.0.1")
-    implementation("com.github.jagrosh:DiscordIPC:master-SNAPSHOT")
+    implementation("io.github.cdagaming:DiscordIPC:1.0.0")
+    implementation("com.google.code.gson:gson:2.10.1")
     intellijPlatform {
-        intellijIdeaCommunity("2024.3.5")
+        intellijIdeaCommunity("2025.2.6")
 
         bundledPlugin("com.intellij.java")
     }
+    // Note: Java 11+ HttpClient and javax.xml are built-in, no external dependencies needed
 }
 
 java {
     sourceCompatibility = JavaVersion.VERSION_17
     targetCompatibility = JavaVersion.VERSION_17
 }
-
-// Configure Gradle IntelliJ Plugin
-// Read more: https://plugins.jetbrains.com/docs/intellij/tools-gradle-intellij-plugin.html
-//intellij {
-//    version.set("2024.2")
-//    type.set("IC") // Target IDE Platform
-//
-//    plugins.set(listOf("java", "maven", "gradle"))
-//}
 
 sourceSets {
     main {
@@ -86,21 +79,19 @@ tasks {
 
         // Include DiscordIPC and required dependencies
         dependencies {
-            include(dependency("com.github.jagrosh:DiscordIPC:.*"))
+            include(dependency("io.github.cdagaming:DiscordIPC:.*"))
             include(dependency("org.json:json:.*"))
             include(dependency("org.slf4j:slf4j-api:.*"))
+            include(dependency("com.google.code.gson:gson:.*")) // include Gson in shadow jar
             // Exclude Kotlin/coroutines as they're provided by IntelliJ
             exclude(dependency("org.jetbrains.kotlin:.*"))
-            exclude(dependency("org.jetbrains.kotlinx:.*"))
         }
 
         // Relocate to avoid conflicts
         relocate("org.json", "net.vortexdevelopment.plugin.vinject.lib.org.json")
         relocate("org.slf4j", "net.vortexdevelopment.plugin.vinject.lib.org.slf4j")
+        relocate("com.google.gson", "net.vortexdevelopment.plugin.vinject.lib.com.google.gson") // relocate Gson
 
-        // Exclude Kotlin and coroutines classes - use IntelliJ's versions
-        exclude("kotlin/**")
-        exclude("kotlinx/**")
         exclude("META-INF/kotlin/**")
         exclude("META-INF/versions/**")
 
@@ -137,8 +128,8 @@ tasks {
     }
 
     patchPluginXml {
-        sinceBuild.set("232")
-        untilBuild.set("252.*")
+        sinceBuild.set("232.*")
+        untilBuild.set("253.*")
     }
 
     signPlugin {

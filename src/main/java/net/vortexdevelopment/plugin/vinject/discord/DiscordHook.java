@@ -20,12 +20,12 @@ public class DiscordHook {
 
     public static void init(Project project) {
         LOG.info("DiscordHook.init() called for project: " + project.getName());
-        
+
         if (initialized) {
             LOG.warn("Discord RPC already initialized, skipping...");
             return; // Already initialized
         }
-        
+
         try {
             // Get client ID from project settings, fallback to default if empty
             DiscordSettings settings = DiscordSettings.getInstance(project);
@@ -34,19 +34,19 @@ public class DiscordHook {
                 clientId = "1387043651288432781"; // Default fallback
             }
             LOG.info("Initializing Discord RPC with client ID: " + clientId);
-            
+
             executorService = Executors.newSingleThreadExecutor(r -> {
                 Thread thread = new Thread(r, "Discord-RPC-Thread");
                 thread.setDaemon(true);
                 LOG.info("Created Discord RPC thread: " + thread.getName());
                 return thread;
             });
-            
+
             LOG.info("Creating DiscordBridge instance...");
             bridge = new DiscordBridge(clientId);
             currentClientId = clientId;
             initialized = true;
-            
+
             LOG.info("Discord RPC initialized successfully with client ID: " + clientId);
         } catch (Exception e) {
             LOG.error("Failed to initialize Discord RPC", e);
@@ -57,14 +57,16 @@ public class DiscordHook {
 
     public static CompletableFuture<Void> connect() {
         System.out.println("🔗 Attempting to connect to Discord RPC...");
-        System.out.println("State - Initialized: " + initialized + ", Connected: " + connected + ", Bridge: " + (bridge != null ? "present" : "null"));
+        System.out.println("State - Initialized: " + initialized + ", Connected: " + connected + ", Bridge: "
+                + (bridge != null ? "present" : "null"));
 
         if (!initialized || bridge == null) {
-            String error = "Discord RPC not initialized (initialized=" + initialized + ", bridge=" + (bridge != null ? "present" : "null") + ")";
+            String error = "Discord RPC not initialized (initialized=" + initialized + ", bridge="
+                    + (bridge != null ? "present" : "null") + ")";
             System.out.println("❌ " + error);
             return CompletableFuture.failedFuture(new IllegalStateException(error));
         }
-        
+
         if (connected) {
             System.out.println("✅ Discord RPC already connected, skipping connection attempt.");
             return CompletableFuture.completedFuture(null);
@@ -85,10 +87,12 @@ public class DiscordHook {
 
     public static CompletableFuture<Void> updatePresence(DiscordPresenceBuilder presence) {
         LOG.info("DiscordHook.updatePresence() called");
-        LOG.info("State - Initialized: " + initialized + ", Connected: " + connected + ", Bridge: " + (bridge != null ? "present" : "null"));
-        
+        LOG.info("State - Initialized: " + initialized + ", Connected: " + connected + ", Bridge: "
+                + (bridge != null ? "present" : "null"));
+
         if (!initialized || !connected || bridge == null) {
-            LOG.warn("Cannot update presence - Discord not ready (initialized=" + initialized + ", connected=" + connected + ", bridge=" + (bridge != null ? "present" : "null") + ")");
+            LOG.warn("Cannot update presence - Discord not ready (initialized=" + initialized + ", connected="
+                    + connected + ", bridge=" + (bridge != null ? "present" : "null") + ")");
             return CompletableFuture.completedFuture(null); // Silently ignore if not connected
         }
 
@@ -129,10 +133,10 @@ public class DiscordHook {
 
     public static boolean isConnected() {
         boolean result = initialized && connected && bridge != null && bridge.isConnected();
-        LOG.info("isConnected() check - initialized=" + initialized + ", connected=" + connected + 
-                  ", bridge=" + (bridge != null ? "present" : "null") + 
-                  ", bridgeConnected=" + (bridge != null ? bridge.isConnected() : "N/A") + 
-                  ", result=" + result);
+        LOG.info("isConnected() check - initialized=" + initialized + ", connected=" + connected +
+                ", bridge=" + (bridge != null ? "present" : "null") +
+                ", bridgeConnected=" + (bridge != null ? bridge.isConnected() : "N/A") +
+                ", result=" + result);
         return result;
     }
 
@@ -154,39 +158,39 @@ public class DiscordHook {
      */
     public static void testConnection(Project project) {
         System.out.println("🧪 === DISCORD CONNECTION TEST START ===");
-        
+
         try {
             // Step 1: Check if enabled
             System.out.println("Step 1: Checking if Discord RPC is enabled...");
             boolean enabled = isEnabled(project);
             System.out.println("   Result: " + (enabled ? "✅ ENABLED" : "❌ DISABLED"));
-            
+
             if (!enabled) {
                 System.out.println("❌ Test failed: Discord RPC is disabled in settings");
                 return;
             }
-            
+
             // Step 2: Initialize
             System.out.println("Step 2: Initializing Discord RPC...");
             init(project);
             System.out.println("   Result: " + (initialized ? "✅ INITIALIZED" : "❌ FAILED"));
-            
+
             // Step 3: Check bridge
             System.out.println("Step 3: Checking bridge instance...");
             System.out.println("   Bridge: " + (bridge != null ? "✅ CREATED" : "❌ NULL"));
             System.out.println("   Client ID: " + currentClientId);
-            
+
             // Step 4: Test connection
             System.out.println("Step 4: Testing Discord connection...");
             connect().thenRun(() -> {
                 System.out.println("   Result: ✅ CONNECTION SUCCESSFUL!");
-                
+
                 // Step 5: Test presence
                 System.out.println("Step 5: Testing presence update...");
                 DiscordPresenceBuilder testPresence = new DiscordPresenceBuilder()
-                    .setLine1("Testing VInject Plugin")
-                    .setLine2("Connection test successful!");
-                    
+                        .setLine1("Testing VInject Plugin")
+                        .setLine2("Connection test successful!");
+
                 updatePresence(testPresence).thenRun(() -> {
                     System.out.println("   Result: ✅ PRESENCE UPDATE SUCCESSFUL!");
                     System.out.println("🎉 === DISCORD CONNECTION TEST COMPLETED SUCCESSFULLY ===");
@@ -195,7 +199,7 @@ public class DiscordHook {
                     System.err.println("🧪 === DISCORD CONNECTION TEST COMPLETED WITH ERRORS ===");
                     return null;
                 });
-                
+
             }).exceptionally(connectionError -> {
                 System.err.println("   Result: ❌ CONNECTION FAILED: " + connectionError.getMessage());
                 System.err.println("💡 Possible issues:");
@@ -206,13 +210,12 @@ public class DiscordHook {
                 System.err.println("🧪 === DISCORD CONNECTION TEST FAILED ===");
                 return null;
             });
-            
+
         } catch (Exception e) {
             System.err.println("❌ Test failed with exception: " + e.getMessage());
             e.printStackTrace();
             System.err.println("🧪 === DISCORD CONNECTION TEST FAILED ===");
         }
     }
-
 
 }

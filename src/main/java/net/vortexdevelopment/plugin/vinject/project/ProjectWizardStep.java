@@ -27,6 +27,7 @@ import com.intellij.ui.dsl.builder.Row;
 import kotlin.Unit;
 import kotlin.jvm.functions.Function1;
 import net.vortexdevelopment.plugin.vinject.Plugin;
+import net.vortexdevelopment.plugin.vinject.version.MavenVersionResolver;
 import org.jetbrains.annotations.NotNull;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -281,6 +282,10 @@ public class ProjectWizardStep implements NewProjectWizardStep {
                 String apiPom = new String(Plugin.class.getResourceAsStream("/projectWizard/multi/api.pom.xml").readAllBytes(), StandardCharsets.UTF_8);
                 String mainPom = new String(Plugin.class.getResourceAsStream("/projectWizard/multi/main.pom.xml").readAllBytes(), StandardCharsets.UTF_8);
 
+                // Resolve "latest" version placeholders before other replacements
+                apiPom = resolveLatestVersions(apiPom);
+                mainPom = resolveLatestVersions(mainPom);
+
                 //Replace placeholders in the templates
                 parentPom = parentPom.replace("$GROUP_ID$", groupId).replace("$ARTIFACT_ID$", artifactId);
                 apiPom = apiPom.replace("$GROUP_ID$", groupId).replace("$ARTIFACT_ID$", artifactId);
@@ -295,6 +300,8 @@ public class ProjectWizardStep implements NewProjectWizardStep {
                         .replace("$CLASS_NAME$", artifactId + "Api");
 
                 String pluginClass = new String(Plugin.class.getResourceAsStream("/projectWizard/multi/PluginClass.java").readAllBytes(), StandardCharsets.UTF_8);
+                // Resolve "latest" version in PluginClass.java annotation
+                pluginClass = resolveLatestVersions(pluginClass);
                 pluginClass = pluginClass.replace("$PACKAGE$", groupIdLower + "." + artifactId.toLowerCase(Locale.ENGLISH))
                         .replace("$CLASS_NAME$", artifactId);
 
@@ -369,6 +376,8 @@ public class ProjectWizardStep implements NewProjectWizardStep {
                 // Generate project without API module
                 //Load templates from resources/projectWizard/single/ - pom.xml, main.java
                 String pom = new String(Plugin.class.getResourceAsStream("/projectWizard/single/main.pom.xml").readAllBytes(), StandardCharsets.UTF_8);
+                // Resolve "latest" version placeholders
+                pom = resolveLatestVersions(pom);
                 pom = pom.replace("$GROUP_ID$", groupId)
                         .replace("$ARTIFACT_ID$", artifactId)
                         .replace("$GROUP_ID_SLASHES$", groupIdLower.replace(".", "/"))
@@ -392,6 +401,8 @@ public class ProjectWizardStep implements NewProjectWizardStep {
 
                 //Load main.java template
                 String pluginClass = new String(Plugin.class.getResourceAsStream("/projectWizard/single/PluginClass.java").readAllBytes(), StandardCharsets.UTF_8);
+                // Resolve "latest" version in PluginClass.java annotation
+                pluginClass = resolveLatestVersions(pluginClass);
                 pluginClass = pluginClass.replace("$PACKAGE$", groupIdLower + "." + artifactId.toLowerCase(Locale.ENGLISH))
                         .replace("$CLASS_NAME$", artifactId);
 
@@ -435,5 +446,53 @@ public class ProjectWizardStep implements NewProjectWizardStep {
     @Override
     public @NotNull UserDataHolder getData() {
         return context;
+    }
+
+    /**
+     * Resolves "latest" version placeholders in template content.
+     * Replaces "latest" with actual resolved versions from the Maven repository.
+     * 
+     * @param templateContent The template content that may contain "latest" placeholders
+     * @return Template content with "latest" replaced by resolved versions
+     */
+    private String resolveLatestVersions(String templateContent) {
+        if (templateContent == null || !templateContent.contains("latest")) {
+            return templateContent;
+        }
+
+        MavenVersionResolver resolver = MavenVersionResolver.getInstance();
+        String result = templateContent;
+
+        // Resolve VortexCore version
+        if (result.contains("VortexCore") && result.contains("latest")) {
+            String vortexCoreVersion = resolver.resolveVersion("net.vortexdevelopment", "VortexCore");
+            
+            // Replace in POM format with flexible whitespace: <version>latest</version>
+            // Pattern: <groupId>net.vortexdevelopment</groupId> ... <artifactId>VortexCore</artifactId> ... <version>latest</version>
+            result = result.replaceAll(
+                    "(<groupId>net\\.vortexdevelopment</groupId>\\s*<artifactId>VortexCore</artifactId>\\s*<version>)latest(</version>)",
+                    "$1" + vortexCoreVersion + "$2"
+            );
+            
+            // Replace in annotation format: version = "latest"
+            // Pattern: @TemplateDependency(..., artifactId = "VortexCore", version = "latest")
+            result = result.replaceAll(
+                    "(artifactId\\s*=\\s*\"VortexCore\",\\s*version\\s*=\\s*\")latest(\")",
+                    "$1" + vortexCoreVersion + "$2"
+            );
+        }
+
+        // Resolve VInject-Transformer version
+        if (result.contains("VInject-Transformer") && result.contains("latest")) {
+            String transformerVersion = resolver.resolveVersion("net.vortexdevelopment", "VInject-Transformer");
+            
+            // Replace in POM format with flexible whitespace: <version>latest</version>
+            result = result.replaceAll(
+                    "(<groupId>net\\.vortexdevelopment</groupId>\\s*<artifactId>VInject-Transformer</artifactId>\\s*<version>)latest(</version>)",
+                    "$1" + transformerVersion + "$2"
+            );
+        }
+
+        return result;
     }
 }

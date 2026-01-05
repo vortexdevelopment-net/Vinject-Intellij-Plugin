@@ -26,7 +26,7 @@
     <!-- Extension points defined by the plugin.
          Read more: https://plugins.jetbrains.com/docs/intellij/plugin-extension-points.html -->
     <extensions defaultExtensionNs="com.intellij">
-        <postStartupActivity implementation="net.vortexdevelopment.plugin.vinject.Plugin"/>
+        <backgroundPostStartupActivity implementation="net.vortexdevelopment.plugin.vinject.Plugin"/>
         <localInspection language="JAVA"
                          groupName="VInject"
                          displayName="Ensure @Inject is only used in @Component classes"
@@ -45,9 +45,8 @@
             id="discord.rpc.settings"
             displayName="Discord Rich Presence"
             parentId="other"
-            instance="net.vortexdevelopment.plugin.vinject.discord.DiscordSettingsConfigurable"/>
-        
-        <projectService serviceImplementation="net.vortexdevelopment.plugin.vinject.discord.DiscordSettings"/>
+            instance="net.vortexdevelopment.plugin.vinject.discord.DiscordSettingsConfigurable"
+            dynamic="true"/>
 
         <!--<compiler.inspectionValidator implementation="net.vortexdevelopment.plugin.vinject.build.VInjectInspectionValidator" order="first" id="vinject.component.validator"/>
         <lang.psiAugmentProvider implementation="net.vortexdevelopment.plugin.vinject.annotation.EntityAugmentProvider"/>

@@ -1,8 +1,10 @@
 package net.vortexdevelopment.plugin.vinject.syntax;
 
 import com.intellij.openapi.project.DumbService;
+import com.intellij.openapi.project.Project;
 import com.intellij.psi.PsiAnnotation;
 import com.intellij.psi.PsiClass;
+import com.intellij.psi.PsiDocumentManager;
 import com.intellij.psi.PsiTreeChangeEvent;
 import com.intellij.psi.PsiTreeChangeListener;
 import net.vortexdevelopment.plugin.vinject.Plugin;
@@ -33,12 +35,14 @@ public class AnnotationChangeListener implements PsiTreeChangeListener {
     }
 
     private void checkForAnnotationChange(PsiAnnotation oldAnnotation, PsiAnnotation newAnnotation) {
-        if (
-            (oldAnnotation.getQualifiedName().equals("net.vortexdevelopment.vinject.annotation.Component") ||
-            oldAnnotation.getQualifiedName().equals("net.vortexdevelopment.vinject.annotation.Bean")) &&
-            (newAnnotation.getQualifiedName().equals("net.vortexdevelopment.vinject.annotation.Component") ||
-            newAnnotation.getQualifiedName().equals("net.vortexdevelopment.vinject.annotation.Bean"))
-        ) {
+        String oldAnnotationName = oldAnnotation.getQualifiedName();
+        String newAnnotationName = newAnnotation.getQualifiedName();
+        
+        // Check if both annotations are component annotations
+        if (oldAnnotationName != null && newAnnotationName != null &&
+            ClassDataManager.COMPONENT_ANNOTATIONS.contains(oldAnnotationName) &&
+            ClassDataManager.COMPONENT_ANNOTATIONS.contains(newAnnotationName) &&
+            oldAnnotationName.equals(newAnnotationName)) {
 
             List<String> oldRegisterSubclasses = ClassDataManager.getClassArray(oldAnnotation, "registerSubclasses");
             List<String> newRegisterSubclasses = ClassDataManager.getClassArray(newAnnotation, "registerSubclasses");
@@ -99,18 +103,30 @@ public class AnnotationChangeListener implements PsiTreeChangeListener {
 
     @Override
     public void childrenChanged(@NotNull PsiTreeChangeEvent event) {
+        //Get project from the event's file
+        if (event.getFile() == null) {
+            return;
+        }
+        Project project = event.getFile().getProject();
+        
         //Check if container is already disposed
-        if (Plugin.getProject().isDisposed()) {
+        if (project.isDisposed()) {
             return;
         }
 
-        if (DumbService.isDumb(Plugin.getProject())) {
-            DumbService.getInstance(Plugin.getProject()).runWhenSmart(() -> {
-                childrenChanged(event);
-            });
-            return;
-        }
-        ClassDataManager.processFileChange(event.getFile());
+        PsiDocumentManager.getInstance(project).performLaterWhenAllCommitted(() -> {
+            if (project.isDisposed() || !event.getFile().isValid()) {
+                return;
+            }
+
+            if (DumbService.isDumb(project)) {
+                DumbService.getInstance(project).runWhenSmart(() -> {
+                    ClassDataManager.processFileChange(event.getFile());
+                });
+            } else {
+                ClassDataManager.processFileChange(event.getFile());
+            }
+        });
     }
 
     @Override

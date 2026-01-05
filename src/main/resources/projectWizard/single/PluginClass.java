@@ -8,10 +8,15 @@ import net.vortexdevelopment.vortexcore.VortexPlugin;
         packageName = "$PACKAGE$",
         createInstance = false,
         templateDependencies = {
-                @TemplateDependency(groupId = "net.vortexdevelopment", artifactId = "VortexCore", version = "1.0.0-SNAPSHOT")
+                @TemplateDependency(groupId = "net.vortexdevelopment", artifactId = "VortexCore", version = "latest")
         }
 )
 public final class $CLASS_NAME$ extends VortexPlugin {
+
+    @Override
+    protected void verifyLicense() throws IllegalStateException {
+
+    }
 
     @Override
     public void onPreComponentLoad() {

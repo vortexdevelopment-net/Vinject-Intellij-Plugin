@@ -9,7 +9,7 @@ import java.awt.event.ActionListener;
 
 public class DiscordSettingsPanel extends JPanel {
     private final ProjectSettings settings;
-    
+
     private JCheckBox enabledCheckBox;
     private JTextField clientIdField;
     private JCheckBox showFileNameCheckBox;
@@ -51,68 +51,87 @@ public class DiscordSettingsPanel extends JPanel {
 
     private void layoutComponents() {
         setLayout(new BorderLayout());
-        
+
         JPanel mainPanel = new JPanel(new GridBagLayout());
         GridBagConstraints gbc = new GridBagConstraints();
         gbc.insets = new Insets(5, 5, 5, 5);
         gbc.anchor = GridBagConstraints.WEST;
 
         // Enable Discord RPC
-        gbc.gridx = 0; gbc.gridy = 0; gbc.gridwidth = 2;
+        gbc.gridx = 0;
+        gbc.gridy = 0;
+        gbc.gridwidth = 2;
         mainPanel.add(enabledCheckBox, gbc);
 
         // Client ID
-        gbc.gridx = 0; gbc.gridy = 1; gbc.gridwidth = 1;
+        gbc.gridx = 0;
+        gbc.gridy = 1;
+        gbc.gridwidth = 1;
         mainPanel.add(new JLabel("Discord Client ID:"), gbc);
         gbc.gridx = 1;
         mainPanel.add(clientIdField, gbc);
 
         // Privacy settings
-        gbc.gridx = 0; gbc.gridy = 2; gbc.gridwidth = 2;
+        gbc.gridx = 0;
+        gbc.gridy = 2;
+        gbc.gridwidth = 2;
         mainPanel.add(new JLabel("Privacy Settings:"), gbc);
 
-        gbc.gridx = 0; gbc.gridy = 3; gbc.gridwidth = 1;
+        gbc.gridx = 0;
+        gbc.gridy = 3;
+        gbc.gridwidth = 1;
         mainPanel.add(showFileNameCheckBox, gbc);
         gbc.gridx = 1;
         mainPanel.add(showProjectNameCheckBox, gbc);
 
-        gbc.gridx = 0; gbc.gridy = 4;
+        gbc.gridx = 0;
+        gbc.gridy = 4;
         mainPanel.add(showFileTypeCheckBox, gbc);
         gbc.gridx = 1;
         mainPanel.add(showLineCountCheckBox, gbc);
 
-        gbc.gridx = 0; gbc.gridy = 5; gbc.gridwidth = 2;
+        gbc.gridx = 0;
+        gbc.gridy = 5;
+        gbc.gridwidth = 2;
         mainPanel.add(showElapsedTimeCheckBox, gbc);
 
         // Custom images
-        gbc.gridx = 0; gbc.gridy = 6; gbc.gridwidth = 2;
+        gbc.gridx = 0;
+        gbc.gridy = 6;
+        gbc.gridwidth = 2;
         mainPanel.add(new JLabel("Custom Images (optional):"), gbc);
 
-        gbc.gridx = 0; gbc.gridy = 7; gbc.gridwidth = 1;
+        gbc.gridx = 0;
+        gbc.gridy = 7;
+        gbc.gridwidth = 1;
         mainPanel.add(new JLabel("Big Image Key:"), gbc);
         gbc.gridx = 1;
         mainPanel.add(customBigImageField, gbc);
 
-        gbc.gridx = 0; gbc.gridy = 8;
+        gbc.gridx = 0;
+        gbc.gridy = 8;
         mainPanel.add(new JLabel("Small Image Key:"), gbc);
         gbc.gridx = 1;
         mainPanel.add(customSmallImageField, gbc);
 
         // Custom status
-        gbc.gridx = 0; gbc.gridy = 9;
+        gbc.gridx = 0;
+        gbc.gridy = 9;
         mainPanel.add(new JLabel("Custom Status:"), gbc);
         gbc.gridx = 1;
         mainPanel.add(customStatusTextField, gbc);
 
         // Test connection
-        gbc.gridx = 0; gbc.gridy = 10; gbc.gridwidth = 2;
+        gbc.gridx = 0;
+        gbc.gridy = 10;
+        gbc.gridwidth = 2;
         JPanel testPanel = new JPanel(new FlowLayout(FlowLayout.LEFT));
         testPanel.add(testConnectionButton);
         testPanel.add(connectionStatusLabel);
         mainPanel.add(testPanel, gbc);
 
         add(mainPanel, BorderLayout.NORTH);
-        
+
         updateComponentStates();
     }
 
@@ -159,15 +178,15 @@ public class DiscordSettingsPanel extends JPanel {
 
     public boolean isModified() {
         return enabledCheckBox.isSelected() != settings.isDiscordRpcEnabled() ||
-               !clientIdField.getText().trim().equals(settings.getDiscordClientId()) ||
-               showFileNameCheckBox.isSelected() != settings.isShowFileName() ||
-               showProjectNameCheckBox.isSelected() != settings.isShowProjectName() ||
-               showFileTypeCheckBox.isSelected() != settings.isShowFileType() ||
-               showLineCountCheckBox.isSelected() != settings.isShowLineCount() ||
-               showElapsedTimeCheckBox.isSelected() != settings.isShowElapsedTime() ||
-               !customBigImageField.getText().trim().equals(settings.getCustomBigImage()) ||
-               !customSmallImageField.getText().trim().equals(settings.getCustomSmallImage()) ||
-               !customStatusTextField.getText().trim().equals(settings.getCustomStatusText());
+                !clientIdField.getText().trim().equals(settings.getDiscordClientId()) ||
+                showFileNameCheckBox.isSelected() != settings.isShowFileName() ||
+                showProjectNameCheckBox.isSelected() != settings.isShowProjectName() ||
+                showFileTypeCheckBox.isSelected() != settings.isShowFileType() ||
+                showLineCountCheckBox.isSelected() != settings.isShowLineCount() ||
+                showElapsedTimeCheckBox.isSelected() != settings.isShowElapsedTime() ||
+                !customBigImageField.getText().trim().equals(settings.getCustomBigImage()) ||
+                !customSmallImageField.getText().trim().equals(settings.getCustomSmallImage()) ||
+                !customStatusTextField.getText().trim().equals(settings.getCustomStatusText());
     }
 
     private class TestConnectionListener implements ActionListener {
@@ -175,7 +194,7 @@ public class DiscordSettingsPanel extends JPanel {
         public void actionPerformed(ActionEvent e) {
             testConnectionButton.setEnabled(false);
             connectionStatusLabel.setText("Testing connection...");
-            
+
             // Test Discord connection in background
             SwingUtilities.invokeLater(() -> {
                 try {
@@ -195,4 +214,4 @@ public class DiscordSettingsPanel extends JPanel {
             });
         }
     }
-} 
+}

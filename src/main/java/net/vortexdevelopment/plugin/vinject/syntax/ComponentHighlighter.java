@@ -4,6 +4,7 @@ import com.intellij.codeInspection.AbstractBaseJavaLocalInspectionTool;
 import com.intellij.codeInspection.InspectionManager;
 import com.intellij.codeInspection.ProblemDescriptor;
 import com.intellij.codeInspection.ProblemHighlightType;
+import com.intellij.openapi.project.Project;
 import com.intellij.psi.PsiAnnotation;
 import com.intellij.psi.PsiClass;
 import com.intellij.psi.PsiClassType;
@@ -21,13 +22,17 @@ import net.vortexdevelopment.plugin.vinject.quickfixes.BeanNonAnnotatedQuickFix;
 import net.vortexdevelopment.plugin.vinject.quickfixes.BeanUsedInNonServiceClass;
 import net.vortexdevelopment.plugin.vinject.quickfixes.EntityPrimitiveTypeFix;
 import net.vortexdevelopment.plugin.vinject.quickfixes.InjectToNonComponentClass;
+import net.vortexdevelopment.plugin.vinject.quickfixes.MoveFieldToConstructorParameter;
 import net.vortexdevelopment.plugin.vinject.quickfixes.RemoveInjectNonComponentClass;
 import net.vortexdevelopment.plugin.vinject.quickfixes.RemoveNonComponentConstructorParameters;
 import net.vortexdevelopment.plugin.vinject.quickfixes.RemoveUnusedInjectField;
+import com.intellij.psi.*;
+import com.intellij.psi.util.PsiTreeUtil;
 import org.jetbrains.annotations.NotNull;
 import org.jetbrains.annotations.Nullable;
 
 import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 
 public class ComponentHighlighter extends AbstractBaseJavaLocalInspectionTool {
@@ -106,7 +111,7 @@ public class ComponentHighlighter extends AbstractBaseJavaLocalInspectionTool {
             if (constructor.getParameterList().getParameters().length == 0) {
                 continue;
             }
-            if (!ClassDataManager.isComponentClass(psiClass) || psiClass.getAnnotation("net.vortexdevelopment.vinject.annotation.Injectable") != null) {
+            if (!ClassDataManager.isComponentClass(psiClass) || psiClass.getAnnotation("net.vortexdevelopment.vinject.annotation.util.Injectable") != null) {
                 continue;
             }
             for (PsiParameter parameter : constructor.getParameterList().getParameters()) {
@@ -138,6 +143,31 @@ public class ComponentHighlighter extends AbstractBaseJavaLocalInspectionTool {
             }
         }
 
+        // Check if Entity class has an @Id field
+        if (psiClass.getAnnotation("net.vortexdevelopment.vinject.annotation.database.Entity") != null) {
+            boolean hasId = false;
+            for (PsiField field : psiClass.getAllFields()) {
+                if (field.getAnnotation("net.vortexdevelopment.vinject.annotation.database.Id") != null) {
+                    hasId = true;
+                    break;
+                }
+            }
+            if (!hasId) {
+                PsiElement identifyElement = psiClass.getNameIdentifier();
+                if (identifyElement == null) {
+                    identifyElement = psiClass;
+                }
+                ProblemDescriptor descriptor = manager.createProblemDescriptor(
+                        identifyElement,
+                        "Entity class must have an @Id field",
+                        true,
+                        ProblemHighlightType.GENERIC_ERROR,
+                        isOnTheFly
+                );
+                descriptors.add(descriptor);
+            }
+        }
+
         return descriptors.isEmpty() ? null : descriptors.toArray(new ProblemDescriptor[0]);
     }
 
@@ -146,16 +176,10 @@ public class ComponentHighlighter extends AbstractBaseJavaLocalInspectionTool {
         List<ProblemDescriptor> descriptors = new ArrayList<>();
         PsiClass containingClass = field.getContainingClass();
 
-        PsiAnnotation componentAnnotation = null;
-        for (String annotation : ClassDataManager.getComponentAnnotations()) {
-            if (containingClass != null && containingClass.getAnnotation(annotation) != null) {
-                componentAnnotation = containingClass.getAnnotation(annotation);
-                break;
-            }
-        }
+        boolean isComponent = containingClass != null && ClassDataManager.isComponentClass(containingClass);
 
         //The current class is a component class
-        if (componentAnnotation == null) {
+        if (!isComponent) {
             // Check if the field is annotated with @Inject
             PsiAnnotation injectAnnotation = field.getAnnotation("net.vortexdevelopment.vinject.annotation.Inject");
             if (injectAnnotation != null) {
@@ -192,7 +216,12 @@ public class ComponentHighlighter extends AbstractBaseJavaLocalInspectionTool {
                     }
 
                     //Check if the Inject annotated field is unused
-                    GlobalSearchScope scope = GlobalSearchScope.projectScope(Plugin.getProject());
+                    PsiClass containingClassForScope = field.getContainingClass();
+                    Project project = containingClassForScope != null ? containingClassForScope.getProject() : null;
+                    if (project == null) {
+                        return descriptors.isEmpty() ? null : descriptors.toArray(new ProblemDescriptor[0]);
+                    }
+                    GlobalSearchScope scope = GlobalSearchScope.projectScope(project);
                     Query<PsiReference> query = ReferencesSearch.search(field, scope);
                     if (query.findFirst() == null && !field.hasAnnotation("lombok.Getter")) {
                         ProblemDescriptor descriptor = manager.createProblemDescriptor(
@@ -204,6 +233,25 @@ public class ComponentHighlighter extends AbstractBaseJavaLocalInspectionTool {
                                 new RemoveUnusedInjectField()
                         );
                         descriptors.add(descriptor);
+                    }
+
+                    // Check if field injection (non-static) is used in constructor
+                    // Field injection happens after constructor, so the field will be null in constructor
+                    if (!field.hasModifierProperty(PsiModifier.STATIC) && containingClass != null) {
+                        for (PsiMethod constructor : containingClass.getConstructors()) {
+                            if (isFieldReferencedInConstructor(field, constructor)) {
+                                ProblemDescriptor descriptor = manager.createProblemDescriptor(
+                                        field,
+                                        "Field injection cannot be used in constructor. Field will be null during constructor execution.",
+                                        true,
+                                        ProblemHighlightType.GENERIC_ERROR,
+                                        isOnTheFly,
+                                        new MoveFieldToConstructorParameter()
+                                );
+                                descriptors.add(descriptor);
+                                break; // Only report once per field
+                            }
+                        }
                     }
                 }
             }
@@ -229,5 +277,28 @@ public class ComponentHighlighter extends AbstractBaseJavaLocalInspectionTool {
         }
 
         return descriptors.isEmpty() ? null : descriptors.toArray(new ProblemDescriptor[0]);
+    }
+
+    /**
+     * Checks if a field is referenced within a constructor body.
+     * @param field The field to check
+     * @param constructor The constructor to check
+     * @return true if the field is referenced in the constructor body
+     */
+    private boolean isFieldReferencedInConstructor(@NotNull PsiField field, @NotNull PsiMethod constructor) {
+        PsiCodeBlock body = constructor.getBody();
+        if (body == null) {
+            return false;
+        }
+
+        // Find all reference expressions in the constructor body
+        Collection<PsiReferenceExpression> references = PsiTreeUtil.findChildrenOfType(body, PsiReferenceExpression.class);
+        for (PsiReferenceExpression ref : references) {
+            PsiElement resolved = ref.resolve();
+            if (resolved != null && resolved.equals(field)) {
+                return true;
+            }
+        }
+        return false;
     }
 }

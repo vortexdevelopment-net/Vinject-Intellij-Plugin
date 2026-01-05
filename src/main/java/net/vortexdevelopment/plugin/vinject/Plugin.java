@@ -3,11 +3,15 @@ package net.vortexdevelopment.plugin.vinject;
 import com.intellij.openapi.Disposable;
 import com.intellij.openapi.application.Application;
 import com.intellij.openapi.application.ApplicationManager;
+import com.intellij.openapi.progress.ProgressIndicator;
+import com.intellij.openapi.progress.ProgressManager;
+import com.intellij.openapi.progress.Task;
 import com.intellij.openapi.project.DumbService;
 import com.intellij.openapi.project.Project;
 import com.intellij.openapi.roots.ProjectFileIndex;
 import com.intellij.openapi.roots.ProjectRootManager;
 import com.intellij.openapi.startup.ProjectActivity;
+import com.intellij.openapi.startup.StartupActivity;
 import com.intellij.openapi.util.Computable;
 import com.intellij.openapi.vfs.VirtualFile;
 import com.intellij.psi.PsiFile;
@@ -28,16 +32,12 @@ import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
-public class Plugin implements ProjectActivity, Disposable  {
+public class Plugin implements ProjectActivity, Disposable {
 
-
-    private static final Set<String> BEAN_CLASSES = ConcurrentHashMap.newKeySet();
-    private static boolean multipleRoots = false;
-    private static String rootPackage = "";
-    private static Project project;
     private static DiscordActivityManager globalDiscordActivityManager;
     private static boolean discordInitialized = false;
     private AnnotationChangeListener annotationChangeListener;
+    private Project project;
 
     @Override
     public @Nullable Object execute(@NotNull Project project, @NotNull Continuation<? super Unit> continuation) {
@@ -45,27 +45,60 @@ public class Plugin implements ProjectActivity, Disposable  {
 
         // Schedule scanning and template reload after indexing completes to ensure modules and library roots are available
         DumbService.getInstance(project).runWhenSmart(() -> {
-            ApplicationManager.getApplication().runReadAction((Computable<List<VirtualFile>>) () -> {
+            // Process files in background with progress indication to prevent UI freezes
+            ProgressManager.getInstance().run(new Task.Backgroundable(project, "Scanning VInject annotations", true) {
+                @Override
+                public void run(@NotNull ProgressIndicator indicator) {
+                    ApplicationManager.getApplication().runReadAction((Computable<List<VirtualFile>>) () -> {
+                        // Ensure templates from dependency jars are loaded on startup
+                        TemplateManager.getInstance().reloadTemplates(project);
 
-                // Ensure templates from dependency jars are loaded on startup
-                TemplateManager.getInstance().reloadTemplates(project);
+                        indicator.setText("Collecting source files...");
+                        List<VirtualFile> roots = new ArrayList<>();
+                        ProjectFileIndex projectFileIndex = ProjectRootManager.getInstance(project).getFileIndex();
 
-                long start = System.currentTimeMillis();
-                List<VirtualFile> roots = new ArrayList<>();
-                ProjectFileIndex projectFileIndex = ProjectRootManager.getInstance(project).getFileIndex();
+                        projectFileIndex.iterateContent(file -> {
+                            if (indicator.isCanceled()) {
+                                return false; // Stop iteration if cancelled
+                            }
+                            if (projectFileIndex.isInSource(file) && !file.getPath().contains("resources")
+                                    && !file.getPath().contains("target")) {
+                                roots.add(file);
+                            }
+                            return true; // Continue iteration
+                        });
 
-                projectFileIndex.iterateContent(file -> {
-                    if (projectFileIndex.isInSource(file) && !file.getPath().contains("resources") && !file.getPath().contains("target")) {
-                        roots.add(file);
-                    }
-                    return true; // Continue iteration
-                });
+                        if (indicator.isCanceled()) {
+                            return roots;
+                        }
 
-                for (VirtualFile virtualFile : roots) {
-                    PsiFile psiFile = PsiManager.getInstance(project).findFile(virtualFile);
-                    ClassDataManager.processFileChange(psiFile);
+                        // Process files with progress indication to prevent UI freezes
+                        indicator.setText("Processing " + roots.size() + " files...");
+                        int batchSize = 50; // Check cancellation every 50 files
+                        
+                        for (int i = 0; i < roots.size(); i++) {
+                            if (indicator.isCanceled()) {
+                                break;
+                            }
+                            
+                            VirtualFile virtualFile = roots.get(i);
+                            indicator.setText2("Processing: " + virtualFile.getName());
+                            indicator.setFraction((double) i / roots.size());
+                            
+                            PsiFile psiFile = PsiManager.getInstance(project).findFile(virtualFile);
+                            if (psiFile != null) {
+                                ClassDataManager.processFileChange(psiFile);
+                            }
+                            
+                            // Check cancellation periodically to allow UI responsiveness
+                            if (i % batchSize == 0) {
+                                indicator.checkCanceled();
+                            }
+                        }
+                        
+                        return roots;
+                    });
                 }
-                return roots;
             });
         });
 
@@ -80,12 +113,7 @@ public class Plugin implements ProjectActivity, Disposable  {
         ApplicationManager.getApplication().invokeLater(() -> TemplateManager.getInstance().reloadTemplates(project));
 
         System.out.println("Plugin initialized successfully for project: " + project.getName());
-
         return null;
-    }
-
-    public static Project getProject() {
-        return project;
     }
 
     /**
@@ -94,43 +122,78 @@ public class Plugin implements ProjectActivity, Disposable  {
      * @param proj Project to rescan
      */
     public static void rescanProject(Project proj) {
-        if (proj == null) return;
+        if (proj == null)
+            return;
         // Schedule the rescan to run when indexing (smart mode) is ready.
         DumbService.getInstance(proj).runWhenSmart(() -> {
-            ApplicationManager.getApplication().runReadAction(() -> {
-                ProjectFileIndex projectFileIndex = ProjectRootManager.getInstance(proj).getFileIndex();
-                List<VirtualFile> roots = new ArrayList<>();
-                projectFileIndex.iterateContent(file -> {
-                    if (projectFileIndex.isInSource(file) && !projectFileIndex.isInTestSourceContent(file) && !file.getPath().contains("resources") && !file.getPath().contains("target")) {
-                        roots.add(file);
-                    }
-                    return true;
-                });
-                // Reload templates from dependencies before rescanning project files to ensure templates
-                // provided by library jars are available. This method avoids duplicate registration.
-                TemplateManager.getInstance().reloadTemplates(proj);
+            // Process files in background with progress indication to prevent UI freezes
+            ProgressManager.getInstance().run(new Task.Backgroundable(proj, "Rescanning VInject annotations", true) {
+                @Override
+                public void run(@NotNull ProgressIndicator indicator) {
+                    ApplicationManager.getApplication().runReadAction(() -> {
+                        indicator.setText("Collecting source files...");
+                        ProjectFileIndex projectFileIndex = ProjectRootManager.getInstance(proj).getFileIndex();
+                        List<VirtualFile> roots = new ArrayList<>();
+                        projectFileIndex.iterateContent(file -> {
+                            if (indicator.isCanceled()) {
+                                return false; // Stop iteration if cancelled
+                            }
+                            if (projectFileIndex.isInSource(file) && !projectFileIndex.isInTestSourceContent(file)
+                                    && !file.getPath().contains("resources") && !file.getPath().contains("target")) {
+                                roots.add(file);
+                            }
+                            return true;
+                        });
+                        
+                        if (indicator.isCanceled()) {
+                            return;
+                        }
+                        
+                        // Reload templates from dependencies before rescanning project files to ensure templates
+                        // provided by library jars are available. This method avoids duplicate registration.
+                        indicator.setText("Reloading templates...");
+                        TemplateManager.getInstance().reloadTemplates(proj);
 
-                for (VirtualFile virtualFile : roots) {
-                    PsiFile psiFile = PsiManager.getInstance(proj).findFile(virtualFile);
-                    ClassDataManager.processFileChange(psiFile);
+                        // Process files with progress indication to prevent UI freezes
+                        indicator.setText("Processing " + roots.size() + " files...");
+                        int batchSize = 50; // Check cancellation every 50 files
+                        
+                        for (int i = 0; i < roots.size(); i++) {
+                            if (indicator.isCanceled()) {
+                                break;
+                            }
+                            
+                            VirtualFile virtualFile = roots.get(i);
+                            indicator.setText2("Processing: " + virtualFile.getName());
+                            indicator.setFraction((double) i / roots.size());
+                            
+                            PsiFile psiFile = PsiManager.getInstance(proj).findFile(virtualFile);
+                            if (psiFile != null) {
+                                ClassDataManager.processFileChange(psiFile);
+                            }
+                            
+                            // Check cancellation periodically to allow UI responsiveness
+                            if (i % batchSize == 0) {
+                                indicator.checkCanceled();
+                            }
+                        }
+                    });
                 }
             });
         });
     }
 
-    public static String getRootPackage() {
-        return rootPackage;
-    }
-
     public static void runWriteAction(Runnable runnable) {
         Application application = ApplicationManager.getApplication();
-        if (!application.isWriteAccessAllowed()) return;
+        if (!application.isWriteAccessAllowed())
+            return;
         application.runWriteAction(runnable);
     }
 
     public static void runReadAction(Runnable runnable) {
         Application application = ApplicationManager.getApplication();
-        if (!application.isReadAccessAllowed()) return;
+        if (!application.isReadAccessAllowed())
+            return;
         application.runReadAction(runnable);
     }
 
@@ -143,20 +206,20 @@ public class Plugin implements ProjectActivity, Disposable  {
             }
             return;
         }
-        
+
         System.out.println("🔄 Starting Discord RPC initialization globally...");
-        
+
         try {
             // Check if Discord RPC is enabled in any project's settings
             if (!DiscordHook.isEnabled(project)) {
                 System.out.println("Discord RPC is disabled in settings, skipping initialization");
                 return;
             }
-            
+
             System.out.println("🔧 Initializing Discord RPC globally...");
             // Initialize Discord RPC globally
             DiscordHook.init(project);
-            
+
             System.out.println("🔗 Attempting to connect to Discord...");
             // Connect to Discord
             DiscordHook.connect().thenRun(() -> {
@@ -193,7 +256,7 @@ public class Plugin implements ProjectActivity, Disposable  {
         }
         DiscordHook.shutdown();
         discordInitialized = false;
-        
+
         PsiManager.getInstance(project).removePsiTreeChangeListener(annotationChangeListener);
     }
 }
