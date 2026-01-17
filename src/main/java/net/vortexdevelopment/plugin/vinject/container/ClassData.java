@@ -15,11 +15,15 @@ public class ClassData {
     private String qualifiedName;
     private Set<String> beans = ConcurrentHashMap.newKeySet(); //Provided beans by the class
 
+    public ClassData(String qualifiedName) {
+        this.qualifiedName = qualifiedName;
+    }
+
     public ClassData(PsiClass psiClass, PsiAnnotation annotation) {
         this.qualifiedName = psiClass.getQualifiedName();
 
         //Check if the class is annotated with @Service
-        if (Objects.equals(annotation.getQualifiedName(), "net.vortexdevelopment.vinject.annotation.Service")) {
+        if (Objects.equals(annotation.getQualifiedName(), "net.vortexdevelopment.vinject.annotation.component.Service")) {
             //Get all Beans
             for (PsiMethod method : psiClass.getMethods()) {
                 if (method.getAnnotation("net.vortexdevelopment.vinject.annotation.Bean") != null) {
@@ -39,20 +43,20 @@ public class ClassData {
         }
 
         //Check for component annotations
-        if (Objects.equals(annotation.getQualifiedName(), "net.vortexdevelopment.vinject.annotation.Component")) {
+        if (Objects.equals(annotation.getQualifiedName(), "net.vortexdevelopment.vinject.annotation.component.Component")) {
             //registerSubclasses
             beans.addAll(ClassDataManager.getClassArray(annotation, "registerSubclasses"));
             beans.add(psiClass.getQualifiedName());
         }
 
         //Check for repository annotations
-        if (Objects.equals(annotation.getQualifiedName(), "net.vortexdevelopment.vinject.annotation.Repository")) {
+        if (Objects.equals(annotation.getQualifiedName(), "net.vortexdevelopment.vinject.annotation.component.Repository")) {
             //registerSubclasses
             beans.addAll(ClassDataManager.getClassArray(annotation, "registerSubclasses"));
         }
 
         //Root annotation
-        if (Objects.equals(annotation.getQualifiedName(), "net.vortexdevelopment.vinject.annotation.Root")) {
+        if (Objects.equals(annotation.getQualifiedName(), "net.vortexdevelopment.vinject.annotation.component.Root")) {
             //Add the package name
             beans.add(psiClass.getQualifiedName());
         }

@@ -1,4 +1,4 @@
 name: $ARTIFACT_ID$
-version: '1.0.0-SNAPSHOT'
+version: %%__VERSION__%%
 main: $MAIN$
 api-version: '1.21'

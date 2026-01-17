@@ -40,16 +40,20 @@ public class ClassDataManager {
 
     static {
         // Pre-register the standard annotations - Legacy support
-        COMPONENT_ANNOTATIONS.add("net.vortexdevelopment.vinject.annotation.Root");
-        COMPONENT_ANNOTATIONS.add("net.vortexdevelopment.vinject.annotation.Registry");
-        COMPONENT_ANNOTATIONS.add("net.vortexdevelopment.vinject.annotation.Service");
-        COMPONENT_ANNOTATIONS.add("net.vortexdevelopment.vinject.annotation.Component");
-        COMPONENT_ANNOTATIONS.add("net.vortexdevelopment.vinject.annotation.Repository");
-        COMPONENT_ANNOTATIONS.add("net.vortexdevelopment.vinject.annotation.Api");
-        COMPONENT_ANNOTATIONS.add("net.vortexdevelopment.vinject.annotation.Injectable");
+        COMPONENT_ANNOTATIONS.add("net.vortexdevelopment.vinject.annotation.component.Root");
+        COMPONENT_ANNOTATIONS.add("net.vortexdevelopment.vinject.annotation.component.Registry");
+        COMPONENT_ANNOTATIONS.add("net.vortexdevelopment.vinject.annotation.component.Service");
+        COMPONENT_ANNOTATIONS.add("net.vortexdevelopment.vinject.annotation.component.Component");
+        COMPONENT_ANNOTATIONS.add("net.vortexdevelopment.vinject.annotation.component.Repository");
         COMPONENT_ANNOTATIONS.add("net.vortexdevelopment.vinject.annotation.util.Injectable");
         COMPONENT_ANNOTATIONS.add("net.vortexdevelopment.vinject.annotation.yaml.YamlConfiguration");
         COMPONENT_ANNOTATIONS.add("net.vortexdevelopment.vinject.annotation.yaml.YamlDirectory");
+        COMPONENT_ANNOTATIONS.add("net.vortexdevelopment.vinject.annotation.yaml.Element"); // Elements are injectable
+
+        COMPONENT_ANNOTATIONS.add("net.vortexdevelopment.vortexcore.vinject.annotation.Api");
+
+        // VortexCore - Add classData for org.bukkit.Plugin - It is always provided
+        classData.put("org.bukkit.plugin.Plugin", new ClassData("org.bukkit.plugin.Plugin"));
     }
 
     /**
@@ -71,7 +75,7 @@ public class ClassDataManager {
             if (!psiJavaFile.isValid()) {
                 return;
             }
-            
+
             // Optimize: get classes array once and reuse
             PsiClass[] classes = psiJavaFile.getClasses();
             if (classes.length == 0) {
@@ -133,7 +137,7 @@ public class ClassDataManager {
                     PsiAnnotationMemberValue annotationFqcnValue = registerTemplateAnnotation.findAttributeValue("annotationFqcn");
                     PsiAnnotationMemberValue resourceValue = registerTemplateAnnotation.findAttributeValue("resource");
                     PsiAnnotationMemberValue nameValue = registerTemplateAnnotation.findAttributeValue("name");
-                    
+
                     if (annotationFqcnValue != null && resourceValue != null && nameValue != null) {
                         String annotationFqcn = annotationFqcnValue.getText();
                         String resource = resourceValue.getText();
@@ -143,7 +147,6 @@ public class ClassDataManager {
                     continue;
                 }
 
-                // Check for any component annotation
                 // Check for any component annotation
                 boolean isComponent = false;
                 for (PsiAnnotation annotation : psi.getAnnotations()) {
@@ -156,7 +159,7 @@ public class ClassDataManager {
                                 break;
                             }
                         }
-                        
+
                         if (COMPONENT_ANNOTATIONS.contains(annotationFqn) || isPackageMatch) {
                             ClassData classData = new ClassData(psi, annotation);
                             addClassData(psi, classData);
@@ -176,10 +179,11 @@ public class ClassDataManager {
 
     /**
      * Get the virtual directory for a dependency in the classpath
-     * @param project Current project
-     * @param groupId Maven/Gradle group ID
+     *
+     * @param project    Current project
+     * @param groupId    Maven/Gradle group ID
      * @param artifactId Maven/Gradle artifact ID
-     * @param version Version of the dependency
+     * @param version    Version of the dependency
      * @return VirtualFile representing the dependency root, or null if not found
      */
     private static VirtualFile getDependencyRoot(Project project, String groupId, String artifactId, String version) {
@@ -238,6 +242,7 @@ public class ClassDataManager {
     public static boolean unregisterComponentAnnotation(String fqn) {
         return COMPONENT_ANNOTATIONS.remove(fqn);
     }
+
     public static void addClassData(PsiClass psiClass, ClassData data) {
         classData.put(psiClass.getQualifiedName(), data);
     }
@@ -288,7 +293,6 @@ public class ClassDataManager {
     public static PsiAnnotation[] getAnnotationArray(PsiAnnotation annotation, String propertyName) {
         PsiNameValuePair[] attributes = annotation.getParameterList().getAttributes();
         for (PsiNameValuePair attribute : attributes) {
-            // Check if the attribute name is 'registerSubclasses'
             if (propertyName.equals(attribute.getName())) {
                 PsiAnnotationMemberValue value = attribute.getValue();
                 if (value instanceof PsiArrayInitializerMemberValue arrayValue) {
@@ -302,6 +306,9 @@ public class ClassDataManager {
                         }
                     }
                     return annotations;
+                } else if (value instanceof PsiAnnotation singleAnnotation) {
+                    //Single value
+                    return new PsiAnnotation[]{singleAnnotation};
                 }
             }
         }
