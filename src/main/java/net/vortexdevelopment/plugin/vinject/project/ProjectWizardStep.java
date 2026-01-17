@@ -422,6 +422,12 @@ public class ProjectWizardStep implements NewProjectWizardStep {
                 Files.write(pluginYmlFile.toPath(), pluginYml.getBytes(StandardCharsets.UTF_8));
 
             }
+
+            // Copy gitignore
+            String gitignore = new String(Plugin.class.getResourceAsStream("/projectWizard/gitignore").readAllBytes(), StandardCharsets.UTF_8);
+            File gitignoreFile = new File(baseDir, ".gitignore");
+            gitignoreFile.createNewFile();
+            Files.write(gitignoreFile.toPath(), gitignore.getBytes(StandardCharsets.UTF_8));
         } catch (Exception e) {
             logger.error("Error creating project", e);
             e.printStackTrace();
