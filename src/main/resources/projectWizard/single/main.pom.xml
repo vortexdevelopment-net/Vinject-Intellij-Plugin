@@ -97,7 +97,7 @@
                             <minimizeJar>true</minimizeJar>
                             <artifactSet>
                                 <includes>
-                                    <include>$GROUP_ID$:$ARTIFACT_ID$</include>
+                                    <include>$GROUP_ID$:$ARTIFACT_ID$-Plugin</include>
                                 </includes>
                             </artifactSet>
                             <filters>
