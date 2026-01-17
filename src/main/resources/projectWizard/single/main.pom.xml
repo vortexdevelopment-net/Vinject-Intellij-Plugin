@@ -107,7 +107,7 @@
                                         <exclude>META-INF/*.SF</exclude>
                                         <exclude>META-INF/*.DSA</exclude>
                                         <exclude>META-INF/*.RSA</exclude>
-                                        <excluce>META-INF/maven/**</excluce>
+                                        <exclude>META-INF/maven/**</exclude>
                                         <exclude>INFO_BIN</exclude>
                                         <exclude>INFO_SRC</exclude>
 
